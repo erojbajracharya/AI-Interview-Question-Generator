@@ -7,6 +7,7 @@ import importlib.util
 import question_generator as QUESTION_MODULE
 import resume_parser as RESUME_MODULE
 import final_report as REPORT_MODULE
+import db_helper as DB_MODULE
 
 from job_roles import JOB_ROLES
 
@@ -228,12 +229,34 @@ class InterviewQuestionApp(tk.Tk):
         self.resume_data["role_key"] = role_key
         self.resume_data["role_title"] = role_title
 
+        # --- DB Save: Candidate & Skills ---
+        # Try to extract candidate's name from file name or use default
+        candidate_name = Path(resume_path).stem.replace("_", " ").replace("Resume", "").strip()
+        if not candidate_name:
+            candidate_name = "Candidate"
+        
+        # Save to DB
+        candidate_id = DB_MODULE.save_candidate(
+            full_name=candidate_name,
+            email=f"{candidate_name.lower().replace(' ', '')}@example.com",
+            experience_years=self.resume_data["experience_years"]
+        )
+        self.resume_data["candidate_id"] = candidate_id
+        
+        if candidate_id:
+            DB_MODULE.save_skills(
+                candidate_id=candidate_id,
+                hard_skills=self.resume_data["hard_skills"],
+                soft_skills=self.resume_data["soft_skills"]
+            )
+        # -----------------------------------
+
         self._render_profile()
         self.start_button.config(state="normal")
         self.submit_button.config(state="disabled")
         self.summary_button.config(state="disabled")
         self.question_label.config(text="Resume parsed successfully. Click \"Start Interview\" to begin.")
-        self.status_var.set("Resume parsing complete. Ready to simulate interview.")
+        self.status_var.set("Resume parsing complete & saved to DB. Ready to simulate interview.")
 
     def _render_profile(self):
         self.profile_text.config(state="normal")
@@ -274,6 +297,22 @@ class InterviewQuestionApp(tk.Tk):
         if not self.questions:
             messagebox.showerror("Question error", "Could not generate interview questions.")
             return
+
+        # --- DB Save: Interview Session & Questions ---
+        candidate_id = self.resume_data.get("candidate_id")
+        self.session_id = None
+        self.db_question_ids = []
+        if candidate_id:
+            self.session_id = DB_MODULE.create_session(
+                candidate_id=candidate_id,
+                job_role=self.resume_data["role_title"],
+                difficulty=self.resume_data["difficulty"]
+            )
+            self.db_question_ids = DB_MODULE.save_questions(
+                question_texts=self.questions,
+                difficulty=self.resume_data["difficulty"]
+            )
+        # -----------------------------------------------
 
         self.answers = []
         self.current_index = 0
@@ -378,6 +417,28 @@ class InterviewQuestionApp(tk.Tk):
             status = "Needs improvement."
         report.append(f"Status:        {status}")
         report.append("=" * 57)
+
+        # --- DB Save: Responses & Summary ---
+        if hasattr(self, 'session_id') and self.session_id:
+            # Save responses (zip will match up to the shorter list length safely)
+            valid_qids = self.db_question_ids[:len(answers_only)]
+            valid_answers = answers_only[:len(valid_qids)]
+            DB_MODULE.save_responses(
+                session_id=self.session_id,
+                question_ids=valid_qids,
+                answer_texts=valid_answers
+            )
+            # Save summary evaluation
+            strengths = "Tuned to job role skills: " + ", ".join(self.resume_data.get("hard_skills", []))
+            weaknesses = "Evaluated on difficulty: " + difficulty
+            DB_MODULE.save_summary(
+                session_id=self.session_id,
+                overall_score=avg_score,
+                strengths=strengths,
+                weaknesses=weaknesses,
+                final_feedback=status
+            )
+        # ------------------------------------
 
         # Open a new window and show the report to the user
         report_window = tk.Toplevel(self)
