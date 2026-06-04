@@ -23,17 +23,11 @@ def parse_resume(pdf_path):
     """Parses resume PDF to extract skills and estimate experience."""
     text = extract_text_from_pdf(pdf_path)
     
-    # Load spaCy English model (fall back to blank model if not available)
+    # Load spaCy English model (require the model to be installed)
     try:
         nlp = spacy.load("en_core_web_sm")
-    except OSError:
-        # Fallback to downloading or using blank
-        try:
-            import os
-            os.system("python -m spacy download en_core_web_sm")
-            nlp = spacy.load("en_core_web_sm")
-        except Exception:
-            nlp = spacy.blank("en")
+    except Exception as e:
+        raise RuntimeError("spaCy model 'en_core_web_sm' is required. Install it with: python -m spacy download en_core_web_sm") from e
             
     doc = nlp(text.lower())
     
@@ -105,12 +99,4 @@ def parse_resume(pdf_path):
         "experience_years": experience_years if experience_years > 0 else 1
     }
 
-if __name__ == "__main__":
-    import sys
-    import final_report
-    
-    if len(sys.argv) > 1:
-        # Load final_report to continue the simulation
-        final_report.main()
-    else:
-        print("Please provide a resume PDF file path.")
+

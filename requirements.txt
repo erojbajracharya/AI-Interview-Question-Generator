@@ -1,0 +1,6 @@
+google-genai
+spacy
+PyPDF2
+mysql-connector-python
+# Note: Install the spaCy English model with:
+# python -m spacy download en_core_web_sm
