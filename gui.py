@@ -60,10 +60,13 @@ class InterviewQuestionApp(tk.Tk):
         self.style.configure("TEntry", fieldbackground=self.colors["surface"], bordercolor=self.colors["border"])
 
     def _prompt_api_key(self):
-        api_key = simpledialog.askstring("API Key", "Enter your Gemini API key for better question generation (optional):", show="*")
-        if api_key:
-            self.api_key = api_key.strip()
-            os.environ["GEMINI_API_KEY"] = self.api_key
+        api_key = simpledialog.askstring("API Key", "Enter your Gemini API key (required):", show="*")
+        if not api_key:
+            messagebox.showerror("Missing API Key", "This application requires a Gemini API key to run.")
+            self.destroy()
+            return
+        self.api_key = api_key.strip()
+        os.environ["GEMINI_API_KEY"] = self.api_key
 
     def _on_window_resize(self, event=None):
         """Update responsive values on window resize."""
@@ -142,7 +145,7 @@ class InterviewQuestionApp(tk.Tk):
         self.exit_button.pack(side="right")
 
         # Status
-        self.status_var = tk.StringVar(value="API key set." if self.api_key else "Running with fallback mode.")
+        self.status_var = tk.StringVar(value="API key set.")
         self.status_label = ttk.Label(self, textvariable=self.status_var, foreground=self.colors["secondary"], font=("Segoe UI", 9))
         self.status_label.pack(anchor="w", padx=20, pady=(0, 10))
 
@@ -262,7 +265,12 @@ class InterviewQuestionApp(tk.Tk):
         difficulty = self.resume_data["difficulty"]
         questions = [e["question"] for e in self.answers]
         answers_only = [e["answer"] for e in self.answers]
-        evaluations = REPORT_MODULE.grade_answers(questions, answers_only, role_info, difficulty)
+        try:
+            evaluations = REPORT_MODULE.grade_answers(questions, answers_only, role_info, difficulty)
+        except Exception as e:
+            messagebox.showerror("Evaluation error", f"Evaluation failed: {e}")
+            self.status_var.set("Evaluation failed.")
+            return
 
         # Build report
         report = ["=========================================================", "OFFICIAL INTERVIEW PERFORMANCE REPORT", "=========================================================",

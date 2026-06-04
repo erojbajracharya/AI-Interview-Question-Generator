@@ -71,58 +71,43 @@ def is_slop_answer(answer, question):
     return False, ""
 
 def grade_answers(questions, answers, role_info, difficulty):
-    """Evaluates answers using Gemini if available, otherwise fallback NLP heuristic."""
+    """Evaluate answers using Gemini. No local fallback is performed — GEMINI_API_KEY is required."""
     api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is required for automated evaluation.")
+
+    try:
+        from google import genai
+    except Exception as e:
+        raise ImportError("google.genai package is required for evaluation. Install the official GenAI SDK.") from e
+
+    client = genai.Client(api_key=api_key)
     evaluations = []
-    
+
     for q, a in zip(questions, answers):
-        # First, run local slop detection
         is_slop, reason = is_slop_answer(a, q)
         if is_slop:
             evaluations.append(f"Score: 0/10 | Feedback: Invalid response. {reason} | Improve: Provide a meaningful, structured response answering the question.")
             continue
-            
-        if api_key:
-            try:
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                
-                prompt = (
-                    f"Evaluate this response to an interview question.\n"
-                    f"Job Role: {role_info['title']}\n"
-                    f"Difficulty: {difficulty}\n"
-                    f"Question: {q}\n"
-                    f"Candidate's Answer: {a}\n\n"
-                    f"Provide: \n"
-                    f"1. Score (out of 10)\n"
-                    f"2. Brief Feedback (max 2 sentences)\n"
-                    f"3. Key improvement point\n"
-                    f"Format: Score: X/10 | Feedback: ... | Improve: ...\n"
-                    f"CRITICAL: If the answer is completely off-topic, gibberish, filler text, repetitive nonsense, a cop-out (e.g., 'I don't know', 'skip'), or simply copies/paraphrases the question without answering it, you MUST assign a score of 0/10 and state in the feedback that the answer is non-responsive or invalid."
-                )
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt
-                )
-                evaluations.append(response.text.strip())
-                continue
-            except Exception:
-                pass
 
-        # Simple template heuristic fallback evaluation
-        word_count = len(a.split())
-        if word_count < 5:
-            score = 2
-            feedback = "Too brief. Try to structure your answer using the STAR method."
-            improve = "Elaborate with specific details."
-        elif word_count < 15:
-            score = 5
-            feedback = "A reasonable start, but lacks depth and specific examples."
-            improve = "Use quantitative metrics or concrete projects to prove your point."
-        else:
-            score = 8
-            feedback = "Good response covering key aspects of the question."
-            improve = "Polishing communication delivery and structure."
-        evaluations.append(f"Score: {score}/10 | Feedback: {feedback} | Improve: {improve}")
-        
+        prompt = (
+            f"Evaluate this response to an interview question.\n"
+            f"Job Role: {role_info['title']}\n"
+            f"Difficulty: {difficulty}\n"
+            f"Question: {q}\n"
+            f"Candidate's Answer: {a}\n\n"
+            f"Provide: \n"
+            f"1. Score (out of 10)\n"
+            f"2. Brief Feedback (max 2 sentences)\n"
+            f"3. Key improvement point\n"
+            f"Format: Score: X/10 | Feedback: ... | Improve: ...\n"
+            f"CRITICAL: If the answer is completely off-topic, gibberish, filler text, repetitive nonsense, a cop-out (e.g., 'I don't know', 'skip'), or simply copies/paraphrases the question without answering it, you MUST assign a score of 0/10 and state in the feedback that the answer is non-responsive or invalid."
+        )
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        evaluations.append(response.text.strip())
+
     return evaluations
