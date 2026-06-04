@@ -105,12 +105,4 @@ def parse_resume(pdf_path):
         "experience_years": experience_years if experience_years > 0 else 1
     }
 
-if __name__ == "__main__":
-    import sys
-    import final_report
-    
-    if len(sys.argv) > 1:
-        # Load final_report to continue the simulation
-        final_report.main()
-    else:
-        print("Please provide a resume PDF file path.")
+
