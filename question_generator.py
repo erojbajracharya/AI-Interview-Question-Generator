@@ -31,16 +31,10 @@ def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
     client = genai.Client(api_key=api_key)
     
     prompt = (
-        f"You are an expert interviewer. Generate a list of exactly {num_questions} interview questions "
-        f"for a {role['title']} position at the '{difficulty}' level.\n"
-        f"Candidate's Profile:\n"
-        f"- Extracted Hard Skills: {', '.join(skills_profile['hard_skills'])}\n"
-        f"- Extracted Soft Skills: {', '.join(skills_profile['soft_skills'])}\n"
-        f"- Experience: {skills_profile['experience_years']} years\n\n"
-        f"Requirements:\n"
-        f"- A mix of technical/hard skill questions and behavioral/soft skill questions.\n"
-        f"Format: Return only the numbered list of {num_questions} questions, one per line. No introduction, no other text."
-        f"evaluate score accurately based on the answer, if it is rubbish give 0 out of 10."
+        f"You are a hiring manager interviewing for {role['title']} ({difficulty} level).\n"
+        f"Candidate: {skills_profile['experience_years']} yrs exp. Skills: {', '.join(skills_profile['hard_skills'] + skills_profile['soft_skills'])}.\n"
+        f"Generate {num_questions} realistic, conversational questions (mix of technical and behavioral scenarios) as in a live interview simulation.\n"
+        f"Format: Return only a numbered list, one question per line, no extra text."
     )
     
     response = client.models.generate_content(
@@ -51,7 +45,7 @@ def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
     lines = [line.strip() for line in response.text.split('\n') if line.strip()]
     questions = []
     for line in lines:
-        # Strip leading numbers/dashes if any
+        # Strip leading numbers/dashes (e.g. "1. ", "2) ")
         clean_line = re.sub(r'^\d+[\.\)\s-]+\s*', '', line)
         if clean_line:
             questions.append(clean_line)
