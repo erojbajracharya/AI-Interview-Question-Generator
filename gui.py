@@ -8,6 +8,7 @@ import question_generator as QUESTION_MODULE
 import resume_parser as RESUME_MODULE
 import final_report as REPORT_MODULE
 import db_helper as DB_MODULE
+import resume_screener as SCREENER_MODULE
 
 from job_roles import JOB_ROLES
 
@@ -122,7 +123,7 @@ class InterviewQuestionApp(tk.Tk):
         self.interview_frame.columnconfigure(0, weight=1)
         self.interview_frame.rowconfigure(1, weight=1)
 
-        self.question_label = ttk.Label(self.interview_frame, text="No interview started yet.", font=("Segoe UI", 11, "bold"), foreground=self.colors["text"], wraplength=self.wrap_length, justify="left")
+        self.question_label = ttk.Label(self.interview_frame, text="No Interview Started Yet.", font=("Segoe UI", 11, "bold"), foreground=self.colors["text"], wraplength=self.wrap_length, justify="left")
         self.question_label.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 8))
 
         self.answer_text = scrolledtext.ScrolledText(self.interview_frame, wrap="word", font=("Segoe UI", 10), background="#ffffff", relief="flat", highlightthickness=1, highlightbackground=self.colors["border"], highlightcolor=self.colors["primary"])
@@ -180,15 +181,92 @@ class InterviewQuestionApp(tk.Tk):
         if cid:
             DB_MODULE.save_skills(cid, self.resume_data["hard_skills"], self.resume_data["soft_skills"])
 
+        # Resume Screening (Linear Regression)
+        screening_result = SCREENER_MODULE.screen_resume(self.resume_data, role_key)
+        self.resume_data["screening"] = screening_result
+        report_text = SCREENER_MODULE.format_screening_report(screening_result, role_title)
+
         self._render_profile()
-        self.start_button.config(state="normal")
-        self.question_label.config(text="Resume parsed. Click Start Interview.")
-        self.status_var.set("Resume parsed & saved to DB.")
+
+        if screening_result["passed"]:
+            # Candidate qualifies - allow interview
+            self.start_button.config(state="normal")
+            self.question_label.config(
+                text=f"SCREENING PASSED ({screening_result['match_score']}% Match) - Click Start Interview."
+            )
+            self.status_var.set(f"Resume screened: {screening_result['match_score']}% match - PASSED.")
+            self._show_screening_report(report_text, passed=True)
+        else:
+            # Candidate does not qualify - block interview
+            self.start_button.config(state="disabled")
+            self.question_label.config(
+                text=f"SCREENING FAILED ({screening_result['match_score']}% match) - You do not qualify for this role."
+            )
+            self.status_var.set(f"Resume screened: {screening_result['match_score']}% match - REJECTED.")
+            self._show_screening_report(report_text, passed=False)
+            messagebox.showwarning(
+                "Resume Rejected",
+                f"Your resume matched only {screening_result['match_score']}% to the {role_title} role.\n"
+                f"Minimum required: 60%.\n\n"
+                f"You do not qualify for this position.\n"
+                f"Please update your resume or select a different role."
+            )
+
+    def _show_screening_report(self, report_text, passed=True):
+        """Opens a window with the detailed screening report."""
+        report_window = tk.Toplevel(self)
+        report_window.title("Resume Screening Report")
+        report_window.geometry(f"{min(650, self.winfo_width() - 20)}x{min(500, self.winfo_height() - 50)}")
+        report_window.minsize(500, 350)
+        report_window.configure(background=self.colors["bg"])
+
+        title_color = "#10b981" if passed else "#ef4444"
+        title_text = "Screening Result: PASSED" if passed else "Screening Result: REJECTED"
+        ttk.Label(
+            report_window, text=title_text,
+            font=("Segoe UI", 14, "bold"), foreground=title_color
+        ).pack(anchor="w", padx=20, pady=(15, 10))
+
+        report_widget = scrolledtext.ScrolledText(
+            report_window, wrap="word",
+            font=("Consolas" if os.name == 'nt' else "Courier", 10),
+            background="#ffffff", relief="flat",
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["primary"]
+        )
+        report_widget.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+        report_widget.insert(tk.END, report_text)
+        report_widget.config(state="disabled")
+
+        ttk.Button(
+            report_window, text="Close", style="Secondary.TButton",
+            command=report_window.destroy
+        ).pack(anchor="e", padx=20, pady=(0, 15))
+
+        # Force window rendering and focus
+        report_window.update_idletasks()
+        report_window.update()
+        report_window.lift()
+        report_window.focus_force()
 
     def _render_profile(self):
         self.profile_text.config(state="normal")
         self.profile_text.delete("1.0", tk.END)
-        text = f"Role: {self.resume_data['role_title']}\nExperience: {self.resume_data['experience_years']} Year/s | Level: {self.resume_data['difficulty'].upper()}\nHard Skills: {', '.join(self.resume_data['hard_skills']) or 'None'}\nSoft Skills: {', '.join(self.resume_data['soft_skills']) or 'None'}"
+        
+        screening_info = ""
+        if "screening" in self.resume_data:
+            scr = self.resume_data["screening"]
+            status = "PASSED" if scr["passed"] else "REJECTED"
+            screening_info = f"\nScreening Status: {status} ({scr['match_score']}% match)"
+            
+        text = (
+            f"Role: {self.resume_data['role_title']}\n"
+            f"Experience: {self.resume_data['experience_years']} Year/s | Level: {self.resume_data['difficulty'].upper()}\n"
+            f"Hard Skills: {', '.join(self.resume_data['hard_skills']) or 'None'}\n"
+            f"Soft Skills: {', '.join(self.resume_data['soft_skills']) or 'None'}"
+            f"{screening_info}"
+        )
         self.profile_text.insert(tk.END, text)
         self.profile_text.config(state="disabled")
 
@@ -286,7 +364,7 @@ class InterviewQuestionApp(tk.Tk):
                 total_score += 5
 
         avg_score = total_score / len(self.answers)
-        status = "Highly Recommended!" if avg_score >= 8 else ("Recommended with training" if avg_score >= 5 else "Needs improvement")
+        status = "Highly Recommended!" if avg_score >= 8 else ("Recommended with training" if avg_score >= 5 else "Needs Improvement")
         report.extend(["=" * 57, f"OVERALL SCORE: {avg_score:.1f}/10", f"Status: {status}", "=" * 57])
 
         # Save to DB
