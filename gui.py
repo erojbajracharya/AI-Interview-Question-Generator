@@ -207,7 +207,7 @@ class InterviewQuestionApp(tk.Tk):
             messagebox.showwarning(
                 "Resume Rejected",
                 f"Your resume matched only {screening_result['match_score']}% to the {role_title} role.\n"
-                f"Minimum required: 60%.\n\n"
+                f"Minimum required: 51%.\n\n"
                 f"You do not qualify for this position.\n"
                 f"Please update your resume or select a different role."
             )

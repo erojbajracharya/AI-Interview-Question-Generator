@@ -15,7 +15,7 @@ The weights were chosen to reflect hiring priorities:
   - Experience matters next      (30%)
   - Soft skills round it out     (20%)
 
-Threshold: >= 60% → PASS, < 60% → REJECT
+Threshold: >= 51% → PASS, < 51% → REJECT
 """
 
 import numpy as np
@@ -28,7 +28,7 @@ from job_roles import JOB_ROLES
 WEIGHTS = np.array([0.50, 0.20, 0.30])   # [hard, soft, experience]
 BIAS = 0.0                                # no artificial boost
 
-PASS_THRESHOLD = 0.60  # 60%
+PASS_THRESHOLD = 0.51  # 51%
 
 
 def _compute_features(resume_data: dict, role_key: str) -> dict:
