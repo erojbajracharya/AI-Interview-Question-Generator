@@ -188,7 +188,9 @@ class InterviewQuestionApp(tk.Tk):
     def _render_profile(self):
         self.profile_text.config(state="normal")
         self.profile_text.delete("1.0", tk.END)
-        text = f"Role: {self.resume_data['role_title']}\nExperience: {self.resume_data['experience_years']} Year/s | Level: {self.resume_data['difficulty'].upper()}\nHard Skills: {', '.join(self.resume_data['hard_skills']) or 'None'}\nSoft Skills: {', '.join(self.resume_data['soft_skills']) or 'None'}"
+        exp = self.resume_data['experience_years']
+        exp_str = f"{exp:g}"  # e.g. 0.5, 2, 3.5 (strips trailing zeros)
+        text = f"Role: {self.resume_data['role_title']}\nExperience: {exp_str} Year/s | Level: {self.resume_data['difficulty'].upper()}\nHard Skills: {', '.join(self.resume_data['hard_skills']) or 'None'}\nSoft Skills: {', '.join(self.resume_data['soft_skills']) or 'None'}"
         self.profile_text.insert(tk.END, text)
         self.profile_text.config(state="disabled")
 
@@ -274,7 +276,7 @@ class InterviewQuestionApp(tk.Tk):
 
         # Build report
         report = ["=========================================================", "OFFICIAL INTERVIEW PERFORMANCE REPORT", "=========================================================",
-                  f"Job Role: {role_info['title']}", f"Target Level: {difficulty.upper()}", f"Experience: {self.resume_data['experience_years']} Year/s", "-" * 57]
+                  f"Job Role: {role_info['title']}", f"Target Level: {difficulty.upper()}", f"Experience: {self.resume_data['experience_years']:g} Year/s", "-" * 57]
         
         total_score = 0
         for idx, (q, a, e) in enumerate(zip(questions, answers_only, evaluations), 1):

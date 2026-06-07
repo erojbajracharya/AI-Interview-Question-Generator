@@ -17,7 +17,7 @@ CREATE TABLE Candidates (
     email           VARCHAR(100)  UNIQUE,
     phone           VARCHAR(20),
     education       VARCHAR(255),
-    experience_years INT DEFAULT 0
+    experience_years DECIMAL(4,1) DEFAULT 0.0
 );
 
 -- ============================================================

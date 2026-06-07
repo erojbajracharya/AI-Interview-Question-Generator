@@ -52,7 +52,7 @@ def initialize_database():
                 email           VARCHAR(100)  UNIQUE,
                 phone           VARCHAR(20),
                 education       VARCHAR(255),
-                experience_years INT DEFAULT 0
+                experience_years DECIMAL(4,1) DEFAULT 0.0
             )
             """,
             """
@@ -138,7 +138,7 @@ def get_connection():
 
 # ── 1. Candidates ────────────────────────────────────────────────────────────
 
-def save_candidate(full_name, email=None, phone=None, education=None, experience_years=0):
+def save_candidate(full_name, email=None, phone=None, education=None, experience_years=0.0):
     """Insert a new candidate or retrieve existing one if email duplicates, and return candidate_id."""
     conn = get_connection()
     if not conn:
@@ -432,7 +432,7 @@ if __name__ == "__main__":
         email="navaraj@example.com",
         phone="9841000000",
         education="Bachelor in Computer Science",
-        experience_years=3
+        experience_years=3.0
     )
 
     if cid:

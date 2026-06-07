@@ -32,7 +32,7 @@ def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
     
     prompt = (
         f"You are a hiring manager interviewing for {role['title']} ({difficulty} level).\n"
-        f"Candidate: {skills_profile['experience_years']} yrs exp. Skills: {', '.join(skills_profile['hard_skills'] + skills_profile['soft_skills'])}.\n"
+        f"Candidate: {skills_profile['experience_years']:g} yrs exp. Skills: {', '.join(skills_profile['hard_skills'] + skills_profile['soft_skills'])}.\n"
         f"Generate {num_questions} realistic, conversational questions (mix of technical and behavioral scenarios) as in a live interview simulation.\n"
         f"Format: Return only a numbered list, one question per line, no extra text."
     )
