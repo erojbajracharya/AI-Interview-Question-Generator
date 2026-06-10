@@ -86,3 +86,17 @@ CREATE TABLE InterviewSummary (
     FOREIGN KEY (session_id) REFERENCES InterviewSessions(session_id)
         ON DELETE CASCADE
 );
+
+-- ============================================================
+-- 7. StoredQuestions Table
+--    Stores the pool of reusable interview questions for database mode
+-- ============================================================
+CREATE TABLE StoredQuestions (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    job_role       VARCHAR(100) NOT NULL,
+    difficulty     ENUM('Easy', 'Medium', 'Hard') NOT NULL,
+    topic          VARCHAR(100),
+    question       TEXT NOT NULL,
+    answer         TEXT,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+);

@@ -39,6 +39,11 @@ def check_stored_data():
         summaries_count = cursor.fetchone()[0]
         print(f"Evaluation Summaries:  {summaries_count}")
 
+        # 7. Stored Questions Pool
+        cursor.execute("SELECT COUNT(*) FROM StoredQuestions")
+        stored_questions_count = cursor.fetchone()[0]
+        print(f"Stored Questions (Pool): {stored_questions_count}")
+
         if candidates_count > 0:
             print("\n--- Recent Candidates ---")
             cursor.execute("SELECT candidate_id, full_name, email, experience_years FROM Candidates ORDER BY candidate_id DESC LIMIT 5")
@@ -58,6 +63,12 @@ def check_stored_data():
             for sid, name, role, diff, score in cursor.fetchall():
                 score_str = f"{score}/10" if score is not None else "In Progress"
                 print(f"Session {sid} | Candidate: {name} | Role: {role} ({diff}) | Score: {score_str}")
+
+        if stored_questions_count > 0:
+            print("\n--- Recent Stored Questions in Pool (Sample) ---")
+            cursor.execute("SELECT id, job_role, difficulty, question FROM StoredQuestions ORDER BY id DESC LIMIT 5")
+            for qid, role, diff, q in cursor.fetchall():
+                print(f"ID: {qid} | Role: {role} ({diff}) | Q: {q[:60]}...")
 
         print("\n================================")
         cursor.close()

@@ -3,5 +3,8 @@ spacy
 PyPDF2
 mysql-connector-python
 numpy
+Flask
+Flask-CORS
+python-dotenv
 # Note: Install the spaCy English model with:
 # python -m spacy download en_core_web_sm

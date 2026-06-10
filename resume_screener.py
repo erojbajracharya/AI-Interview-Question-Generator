@@ -15,7 +15,7 @@ The weights were chosen to reflect hiring priorities:
   - Experience matters next      (30%)
   - Soft skills round it out     (20%)
 
-Threshold: >= 51% → PASS, < 51% → REJECT
+Threshold: >= 51% -> PASS, < 51% -> REJECT
 """
 
 import numpy as np
@@ -61,7 +61,7 @@ def _compute_features(resume_data: dict, role_key: str) -> dict:
     candidate_exp = resume_data.get("experience_years", 0)
 
     if expected_exp == 0:
-        exp_ratio = 1.0  # no experience required → full match
+        exp_ratio = 1.0  # no experience required -> full match
     else:
         exp_ratio = min(candidate_exp / expected_exp, 1.0)
 

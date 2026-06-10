@@ -61,13 +61,18 @@ class InterviewQuestionApp(tk.Tk):
         self.style.configure("TEntry", fieldbackground=self.colors["surface"], bordercolor=self.colors["border"])
 
     def _prompt_api_key(self):
-        api_key = simpledialog.askstring("API Key", "Enter your Gemini API key (required):", show="*")
-        if not api_key:
-            messagebox.showerror("Missing API Key", "This application requires a Gemini API key to run.")
-            self.destroy()
-            return
-        self.api_key = api_key.strip()
-        os.environ["GEMINI_API_KEY"] = self.api_key
+        api_key = simpledialog.askstring("API Key", "Enter your Gemini API key (optional, leave blank for Database mode):", show="*")
+        if api_key and api_key.strip():
+            self.api_key = api_key.strip()
+            os.environ["GEMINI_API_KEY"] = self.api_key
+            if hasattr(self, 'status_var'):
+                self.status_var.set("API key set. Ready to generate questions via AI.")
+        else:
+            self.api_key = None
+            if "GEMINI_API_KEY" in os.environ:
+                del os.environ["GEMINI_API_KEY"]
+            if hasattr(self, 'status_var'):
+                self.status_var.set("No API key set. Running in Database questions mode.")
 
     def _on_window_resize(self, event=None):
         """Update responsive values on window resize."""
@@ -108,8 +113,28 @@ class InterviewQuestionApp(tk.Tk):
         self.num_questions_var = tk.IntVar(value=5)
         ttk.Spinbox(setup_frame, from_=1, to=20, textvariable=self.num_questions_var, width=6).grid(row=2, column=1, columnspan=2, padx=(5, 10), pady=5, sticky="w")
 
+        ttk.Label(setup_frame, text="Question Source:").grid(row=3, column=0, sticky="w", padx=10, pady=5)
+        self.source_menu = ttk.Combobox(
+            setup_frame, 
+            values=["Generate New Questions (AI)", "Use Previously Saved Questions (Database)"], 
+            state="readonly"
+        )
+        if self.api_key:
+            self.source_menu.current(0)
+        else:
+            self.source_menu.current(1)
+        self.source_menu.grid(row=3, column=1, columnspan=2, padx=(5, 10), pady=5, sticky="ew")
+        self.source_menu.bind("<<ComboboxSelected>>", self._on_source_change)
+
+        self.save_to_db_var = tk.BooleanVar(value=True)
+        self.save_to_db_cb = ttk.Checkbutton(setup_frame, text="Save AI-generated questions to Database for reuse", variable=self.save_to_db_var)
+        self.save_to_db_cb.grid(row=4, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+
+        # Set up checkbutton state
+        self._on_source_change()
+
         self.parse_button = ttk.Button(setup_frame, text="Parse Resume & Prepare", style="Accent.TButton", command=self._parse_resume)
-        self.parse_button.grid(row=3, column=0, columnspan=3, padx=10, pady=(8, 5), sticky="ew")
+        self.parse_button.grid(row=5, column=0, columnspan=3, padx=10, pady=(8, 5), sticky="ew")
 
         # 2. Profile Frame
         self.info_frame = ttk.LabelFrame(main_container, text="2. Candidate Profile")
@@ -146,7 +171,8 @@ class InterviewQuestionApp(tk.Tk):
         self.exit_button.pack(side="right")
 
         # Status
-        self.status_var = tk.StringVar(value="API key set.")
+        initial_status = "API key set. Ready for AI mode." if self.api_key else "No API key. Database questions mode active."
+        self.status_var = tk.StringVar(value=initial_status)
         self.status_label = ttk.Label(self, textvariable=self.status_var, foreground=self.colors["secondary"], font=("Segoe UI", 9))
         self.status_label.pack(anchor="w", padx=20, pady=(0, 10))
 
@@ -275,6 +301,12 @@ class InterviewQuestionApp(tk.Tk):
         self.profile_text.insert(tk.END, text)
         self.profile_text.config(state="disabled")
 
+    def _on_source_change(self, event=None):
+        if self.source_menu.get().startswith("Generate New"):
+            self.save_to_db_cb.config(state="normal")
+        else:
+            self.save_to_db_cb.config(state="disabled")
+
     def _start_interview(self):
         if not self.resume_data:
             messagebox.showwarning("Error", "Parse a resume first.")
@@ -285,15 +317,69 @@ class InterviewQuestionApp(tk.Tk):
                 num_q = 5
         except:
             num_q = 5
-        try:
-            self.questions = QUESTION_MODULE.generate_questions(self.resume_data, self.resume_data["role_key"], self.resume_data["difficulty"], num_questions=num_q)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate questions: {e}")
-            return
+
+        source = self.source_menu.get()
+        use_ai = source.startswith("Generate New")
+
+        if use_ai and not self.api_key:
+            # Prompt for API key
+            self._prompt_api_key()
+            if not self.api_key:
+                messagebox.showinfo("Fallback", "No API key provided. Switching to database-stored questions.")
+                self.source_menu.set("Use Previously Saved Questions (Database)")
+                self._on_source_change()
+                use_ai = False
+
+        self.questions = []
+        ai_success = False
+
+        if use_ai:
+            try:
+                self.questions = QUESTION_MODULE.generate_questions(
+                    self.resume_data, 
+                    self.resume_data["role_key"], 
+                    self.resume_data["difficulty"], 
+                    num_questions=num_q
+                )
+                if self.questions:
+                    ai_success = True
+                    self.status_var.set(f"Successfully generated {len(self.questions)} questions using AI.")
+            except Exception as e:
+                print(f"[AI Error] {e}")
+                messagebox.showwarning("AI Failed", f"AI generation failed: {e}\nFalling back to database-stored questions.")
+                self.source_menu.set("Use Previously Saved Questions (Database)")
+                self._on_source_change()
+                use_ai = False
+
+        if not use_ai:
+            # Load from database
+            stored_qs = DB_MODULE.get_stored_questions(
+                self.resume_data["role_title"], 
+                self.resume_data["difficulty"], 
+                limit=num_q
+            )
+            self.questions = [q["question"] for q in stored_qs]
+            self.status_var.set(f"Loaded {len(self.questions)} questions from MySQL database.")
+
         if not self.questions:
-            messagebox.showerror("Error", "No questions generated.")
+            messagebox.showerror("Error", "No questions could be loaded from the database or generated by AI.")
             return
-        
+
+        # If AI succeeded and optional saving is enabled, save them to StoredQuestions
+        if ai_success and self.save_to_db_var.get():
+            saved_count = 0
+            for q in self.questions:
+                qid = DB_MODULE.save_stored_question(
+                    job_role=self.resume_data["role_title"],
+                    difficulty=self.resume_data["difficulty"],
+                    topic="AI Generated",
+                    question=q,
+                    answer=None
+                )
+                if qid:
+                    saved_count += 1
+            print(f"[DB] Saved {saved_count} AI questions for future reuse.")
+
         # DB: Save session
         cid = self.resume_data.get("candidate_id")
         if cid:
