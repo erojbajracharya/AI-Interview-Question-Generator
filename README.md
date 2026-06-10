@@ -124,4 +124,4 @@ If both succeed, the project is fully functional on the new laptop.
 
 ---
 
-*Feel free to open an issue or contact the maintainer if any step fails.*
+
