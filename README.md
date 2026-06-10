@@ -1,5 +1,3 @@
-[README (1).md](https://github.com/user-attachments/files/28805778/README.1.md)
-
 # Project Title
 
 A brief description of what this project does and who it's for
