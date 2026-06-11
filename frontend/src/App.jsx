@@ -183,6 +183,19 @@ export default function App() {
     return `${m}:${s}`;
   };
 
+  const formatExperienceYears = (years) => {
+    if (years === null || years === undefined || isNaN(years)) return 'N/A';
+    const y = Number(years);
+    if (y <= 0) return '0 months';
+    if (y < 1) {
+      const months = Math.max(1, Math.floor(y * 12));
+      return `${months} month${months === 1 ? '' : 's'}`;
+    }
+    // show integer years if whole number, otherwise one decimal
+    if (Number.isInteger(y)) return `${y} Year${y === 1 ? '' : 's'}`;
+    return `${y.toFixed(1)} Years`;
+  };
+
   const speakQuestion = (text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -735,7 +748,7 @@ export default function App() {
                   </div>
                   <div className="info-row">
                     <span>Experience Years</span>
-                    <span>{resumeData.experience_years} Year/s</span>
+                    <span>{formatExperienceYears(resumeData.experience_years)}</span>
                   </div>
                   <div className="info-row">
                     <span>Assessed Level</span>
@@ -820,7 +833,7 @@ export default function App() {
                 <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                   {!screeningResult.passed ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '13px' }}>
-                      <AlertCircle size={16} /> Minimum score required to unlock interview is 51%.
+                      <AlertCircle size={16} /> Minimum score required to unlock interview is 40%.
                     </div>
                   ) : (
                     <button onClick={handleStartInterview} className="btn btn-success">
@@ -1132,7 +1145,7 @@ export default function App() {
                           <td>#{row.session_id}</td>
                           <td>
                             <div style={{ fontWeight: '600' }}>{row.full_name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.experience_years} Year/s Experience</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatExperienceYears(row.experience_years)} Experience</div>
                           </td>
                           <td>{row.job_role}</td>
                           <td><span className="badge badge-info">{row.difficulty}</span></td>

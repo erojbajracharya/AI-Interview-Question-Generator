@@ -100,7 +100,9 @@ def screen_resume():
                 "experience_years": resume_data["experience_years"],
                 "difficulty": difficulty,
                 "hard_skills": resume_data["hard_skills"],
-                "soft_skills": resume_data["soft_skills"]
+                "soft_skills": resume_data["soft_skills"],
+                "role_key": resume_data["role_key"],
+                "role_title": resume_data["role_title"]
             },
             "screening": {
                 "match_score": screening_result["match_score"],
