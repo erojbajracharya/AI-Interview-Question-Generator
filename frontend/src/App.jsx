@@ -16,7 +16,12 @@ import {
   ChevronRight,
   User,
   ExternalLink,
-  ChevronLeft
+  ChevronLeft,
+  Mic,
+  MicOff,
+  Send,
+  Volume2,
+  Cpu
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -49,6 +54,149 @@ export default function App() {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [candidateAnswers, setCandidateAnswers] = useState([]);
   const [activeAnswerText, setActiveAnswerText] = useState('');
+  
+  // Custom states for messaging platform feel & speech recognition
+  const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef(null);
+  const isListeningRef = useRef(false);
+  const startTextRef = useRef('');
+  const activeAnswerTextRef = useRef('');
+  
+  // Timer state
+  const [recordingTime, setRecordingTime] = useState(0);
+  const timerRef = useRef(null);
+
+  // Sync activeAnswerText to ref to avoid stale closures in event listeners
+  useEffect(() => {
+    activeAnswerTextRef.current = activeAnswerText;
+  }, [activeAnswerText]);
+
+  // Check speech support on mount
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+    }
+  }, []);
+
+  const startTimer = () => {
+    setRecordingTime(0);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setRecordingTime((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  // simulated typing effect for question loading
+  useEffect(() => {
+    if (activeTab === 'interview' && sessionData) {
+      setIsTyping(true);
+      const timer = setTimeout(() => {
+        setIsTyping(false);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [currentQuestionIdx, activeTab, sessionData]);
+
+  const toggleListening = () => {
+    if (!speechSupported) {
+      alert('Speech Recognition is not supported by your browser. Please use Chrome, Safari, or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      // Stop listening manually
+      isListeningRef.current = false;
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      stopTimer();
+    } else {
+      // Start listening
+      try {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        startTextRef.current = activeAnswerTextRef.current; // set baseline text
+
+        recognition.onresult = (event) => {
+          let transcript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          const base = startTextRef.current;
+          const separator = base && !base.endsWith(' ') ? ' ' : '';
+          setActiveAnswerText(base + separator + transcript);
+        };
+
+        recognition.onerror = (event) => {
+          console.error('Speech recognition error', event.error);
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            setIsListening(false);
+            isListeningRef.current = false;
+            stopTimer();
+          }
+        };
+
+        recognition.onend = () => {
+          if (isListeningRef.current) {
+            // Restart automatically if user hasn't stopped it
+            try {
+              startTextRef.current = activeAnswerTextRef.current;
+              recognition.start();
+            } catch (err) {
+              console.error('Failed to restart speech recognition:', err);
+            }
+          } else {
+            setIsListening(false);
+            stopTimer();
+          }
+        };
+
+        recognitionRef.current = recognition;
+        isListeningRef.current = true;
+        recognition.start();
+        setIsListening(true);
+        startTimer();
+      } catch (err) {
+        console.error('Failed to start speech recognition:', err);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const speakQuestion = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(v => v.lang.startsWith('en'));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert('Text-to-speech is not supported in this browser.');
+    }
+  };
   
   // Evaluation Report state
   const [evaluationReport, setEvaluationReport] = useState(null); // { evaluations, overall_score, status }
@@ -212,6 +360,14 @@ export default function App() {
   // Handle Answer Submission (automatic evaluation on last question)
   const handleSubmitAnswer = async (e) => {
     if (e) e.preventDefault();
+    
+    // Stop speech recognition if listening
+    if (isListening && recognitionRef.current) {
+      isListeningRef.current = false;
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+    
     const answer = activeAnswerText.trim() || '[Skipped]';
     
     // Add answer to list
@@ -712,19 +868,31 @@ export default function App() {
 
               <div className="chat-messages">
                 {/* Simulated conversation history */}
-                {sessionData.questions.slice(0, currentQuestionIdx + 1).map((q, idx) => {
+                {sessionData.questions.slice(0, isTyping ? currentQuestionIdx : currentQuestionIdx + 1).map((q, idx) => {
                   const hasAnswer = idx < candidateAnswers.length;
-                  const isCurrent = idx === currentQuestionIdx;
                   
                   return (
                     <React.Fragment key={idx}>
                       {/* Question bubble */}
                       <div className="message-bubble message-system">
-                        <div className="message-meta">SYSTEM (INTERVIEWER)</div>
-                        {q.question_text}
+                        <div className="message-meta-container">
+                          <div className="avatar avatar-system"><Cpu size={16} /></div>
+                          <div className="message-meta">INTERVIEWER (AI)</div>
+                          <button 
+                            type="button" 
+                            className="btn-tts" 
+                            onClick={() => speakQuestion(q.question_text)} 
+                            title="Read Question Aloud"
+                          >
+                            <Volume2 size={14} />
+                          </button>
+                        </div>
+                        <div className="message-text-content">
+                          {q.question_text}
+                        </div>
                         {q.reference_answer && (
                           <div style={{ marginTop: '8px', fontSize: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', color: 'var(--secondary)' }}>
-                            [Database Standard Mode - Grading guided by reference answers]
+                            [Database Reference Answer Enabled]
                           </div>
                         )}
                       </div>
@@ -732,22 +900,68 @@ export default function App() {
                       {/* Candidate Answer bubble */}
                       {hasAnswer && (
                         <div className="message-bubble message-candidate">
-                          <div className="message-meta">CANDIDATE (YOU)</div>
-                          {candidateAnswers[idx]}
+                          <div className="message-meta-container">
+                            <div className="message-meta">CANDIDATE (YOU)</div>
+                            <div className="avatar avatar-candidate"><User size={16} /></div>
+                          </div>
+                          <div className="message-text-content">
+                            {candidateAnswers[idx]}
+                          </div>
                         </div>
                       )}
                     </React.Fragment>
                   );
                 })}
+
+                {isTyping && (
+                  <div className="message-bubble message-system">
+                    <div className="message-meta-container">
+                      <div className="avatar avatar-system"><Cpu size={16} /></div>
+                      <div className="message-meta">INTERVIEWER (AI) is thinking...</div>
+                    </div>
+                    <div className="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                )}
                 <div ref={chatBottomRef}></div>
               </div>
+
+              {/* Sound Wave Animation when recording */}
+              {isListening && (
+                <div className="voice-status-container">
+                  <div className="soundwave">
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                    <div className="bar"></div>
+                  </div>
+                  <span className="voice-status-text">Recording... {formatTime(recordingTime)}</span>
+                </div>
+              )}
 
               {/* Input section */}
               <form onSubmit={handleSubmitAnswer} className="chat-input-area">
                 <div className="chat-input-row">
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`btn-voice ${isListening ? 'active' : ''}`}
+                    title={isListening ? "Stop Listening" : "Speak Response (Voice Mode)"}
+                    disabled={isTyping}
+                  >
+                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                  </button>
+
                   <textarea
                     className="chat-input-box"
-                    placeholder="Type your structured professional response here..."
+                    placeholder={isListening ? "Listening... speak into your mic." : "Type your answer or click the microphone to speak..."}
                     value={activeAnswerText}
                     onChange={(e) => setActiveAnswerText(e.target.value)}
                     onKeyDown={(e) => {
@@ -757,10 +971,17 @@ export default function App() {
                       }
                     }}
                     style={{ height: '80px' }}
+                    disabled={isTyping}
                   />
-                  <button type="submit" className="btn btn-primary" style={{ padding: '0 28px', height: '80px' }}>
-                    {currentQuestionIdx + 1 === sessionData.questions.length ? 'Submit Final' : 'Next Question'}
-                    <ChevronRight size={18} />
+
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-chat-submit" 
+                    style={{ padding: '0 28px', height: '80px' }}
+                    disabled={isTyping}
+                  >
+                    {currentQuestionIdx + 1 === sessionData.questions.length ? 'Submit' : 'Next'}
+                    <Send size={18} />
                   </button>
                 </div>
                 <div className="chat-shortcuts">

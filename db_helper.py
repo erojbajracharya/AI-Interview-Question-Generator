@@ -17,7 +17,7 @@ from datetime import datetime
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "Samyam9849609779@",        # ← Set your MySQL root password here
+    "password": "98671",        # ← Set your MySQL root password here
     "database": "ai_interview_db"
 }
 
