@@ -1,5 +1,4 @@
 # Environment & Configuration
-api_config.py
 .env
 .env.local
 
