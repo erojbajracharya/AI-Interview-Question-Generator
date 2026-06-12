@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Upload,
   Briefcase,
-  Key,
   Star,
   FileText,
   CheckCircle2,
@@ -36,7 +35,6 @@ export default function App() {
   const [numQuestions, setNumQuestions] = useState(5);
   const [questionSource, setQuestionSource] = useState('ai'); // 'ai' or 'db'
   const [saveToDb, setSaveToDb] = useState(true);
-  const [apiKeys, setApiKeys] = useState('');
   
   // File Uploader state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -238,20 +236,9 @@ export default function App() {
         }
       })
       .catch((err) => console.error('Error fetching job roles:', err));
-
-    // Load API keys from localStorage if saved
-    const savedKeys = localStorage.getItem('gemini_api_keys');
-    if (savedKeys) {
-      setApiKeys(savedKeys);
-    }
   }, []);
 
-  // Sync API keys to localStorage
-  const handleApiKeysChange = (e) => {
-    const keys = e.target.value;
-    setApiKeys(keys);
-    localStorage.setItem('gemini_api_keys', keys);
-  };
+
 
   // Scroll to bottom of chat whenever questions/answers change
   useEffect(() => {
@@ -345,7 +332,6 @@ export default function App() {
           num_questions: numQuestions,
           source: questionSource,
           save_to_db: saveToDb,
-          api_keys: apiKeys,
           experience_years: resumeData.experience_years,
           hard_skills: resumeData.hard_skills,
           soft_skills: resumeData.soft_skills
@@ -416,7 +402,6 @@ export default function App() {
           answers: finalAnswers,
           role_key: selectedRoleKey,
           difficulty: sessionData.difficulty,
-          api_keys: apiKeys,
           hard_skills: resumeData.hard_skills
         })
       });
@@ -683,19 +668,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="form-group" style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '20px' }}>
-                <label><Key size={18} /> Gemini API Key Rotator (Optional)</label>
-                <textarea
-                  className="textarea-box"
-                  placeholder="Enter Gemini API key(s) here. For rotation, separate multiple keys with commas (e.g. key1, key2). If left blank, DB questions will be loaded and evaluations will run offline."
-                  value={apiKeys}
-                  onChange={handleApiKeysChange}
-                  style={{ height: '70px' }}
-                />
-                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-                  Keys are stored locally in your browser. The system rotates keys automatically if one fails or encounters rate limits.
-                </p>
-              </div>
+
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
                 <button

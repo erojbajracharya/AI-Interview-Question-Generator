@@ -1,35 +1,27 @@
 # final_report.py
 import os
 import re
+import api_rotator
 
 def grade_answers(questions, answers, role_info, difficulty, reference_answers=None, api_keys=None):
     """
-    Evaluate candidate answers using the Gemini API with API key rotation.
+    Evaluate candidate answers using the Gemini API with automatic API key rotation.
     Falls back to offline grading if no keys are valid or API fails entirely.
     """
-    # Parse api_keys
-    keys_list = []
-    if api_keys:
-        if isinstance(api_keys, str):
-            keys_list = [k.strip() for k in api_keys.split(",") if k.strip()]
-        elif isinstance(api_keys, list):
-            keys_list = [k.strip() for k in api_keys if k.strip()]
+    # Use built-in API keys from api_rotator (ignore api_keys parameter)
+    keys_list = api_rotator.get_all_keys()
     
-    # Fallback to env var if no keys passed in list
     if not keys_list:
-        env_key = os.environ.get("GEMINI_API_KEY")
-        if env_key:
-            keys_list = [env_key]
-            
-    if not keys_list:
-        print("[REPORT] No API keys provided. Falling back to offline heuristic grading.")
+        print("[REPORT] No API keys available. Falling back to offline heuristic grading.")
         return grade_answers_offline(questions, answers, role_info, difficulty, reference_answers=reference_answers)
 
     # We will try evaluating using the available keys
     from google import genai
     
+    rotator = api_rotator.get_rotator()
+    rotator.reset()  # Start from the first key
+    
     evaluations = []
-    key_idx = 0
     
     for idx, (q, a) in enumerate(zip(questions, answers)):
         # Empty or whitespace response guard
@@ -45,7 +37,7 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
         max_attempts = len(keys_list)
         
         while not success and attempts < max_attempts:
-            current_key = keys_list[key_idx]
+            current_key = rotator.get_current_key()
             try:
                 client = genai.Client(api_key=current_key)
                 
@@ -71,9 +63,12 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
                 evaluations.append(response.text.strip())
                 success = True
             except Exception as e:
-                print(f"[REPORT ERROR] AI evaluation failed with key index {key_idx} (Key ending in ...{current_key[-4:] if len(current_key) > 4 else ''}): {e}")
+                print(f"[REPORT ERROR] AI evaluation failed with current API key: {e}")
                 # Rotate to the next key
-                key_idx = (key_idx + 1) % len(keys_list)
+                rotator.mark_failed(rotator.get_current_key())
+                if attempts < max_attempts - 1:
+                    rotator.rotate()
+                    print(f"[REPORT] Rotating to next API key...")
                 attempts += 1
                 
         if not success:

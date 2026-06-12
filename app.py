@@ -10,6 +10,7 @@ import resume_parser as RESUME_MODULE
 import resume_screener as SCREENER_MODULE
 import question_generator as QUESTION_MODULE
 import final_report as REPORT_MODULE
+import api_rotator as API_ROTATOR
 from job_roles import JOB_ROLES
 
 app = Flask(__name__)
@@ -141,7 +142,6 @@ def start_interview():
     num_questions = int(data.get("num_questions", 5))
     source = data.get("source", "ai") # "ai" or "db"
     save_to_db = data.get("save_to_db", True)
-    api_keys = data.get("api_keys", "") # comma-separated string of keys
 
     if not role_key or role_key not in JOB_ROLES:
         return jsonify({"success": False, "error": "Invalid role_key"}), 400
@@ -166,21 +166,9 @@ def start_interview():
     questions_data = [] # Will contain objects: {"question_text": "...", "reference_answer": "..."}
     ai_success = False
     
-    # API key rotation environment variable setup
-    # Split the comma-separated keys and get the first one to set as default env var for the question generator
-    active_key = None
-    if api_keys:
-        keys_list = [k.strip() for k in api_keys.split(",") if k.strip()]
-        if keys_list:
-            active_key = keys_list[0]
-            os.environ["GEMINI_API_KEY"] = active_key
-            
     # Try AI Mode
     if source == "ai":
         try:
-            if not active_key and not os.environ.get("GEMINI_API_KEY"):
-                raise ValueError("No API key available for AI generation mode.")
-                
             raw_qs = QUESTION_MODULE.generate_questions(
                 resume_data,
                 role_key,
@@ -264,7 +252,6 @@ def submit_interview():
     answers = data.get("answers", []) # list of string responses
     role_key = data.get("role_key")
     difficulty = data.get("difficulty")
-    api_keys = data.get("api_keys", "")
     hard_skills = data.get("hard_skills", [])
 
     if not role_key or role_key not in JOB_ROLES:
@@ -277,14 +264,13 @@ def submit_interview():
     reference_answers = [q.get("reference_answer") for q in questions]
 
     try:
-        # Grade candidate answers (utilizing API key rotation and database reference answers)
+        # Grade candidate answers (utilizing automatic API key rotation)
         evaluations = REPORT_MODULE.grade_answers(
             questions=question_texts,
             answers=answers,
             role_info=role_info,
             difficulty=difficulty,
-            reference_answers=reference_answers,
-            api_keys=api_keys
+            reference_answers=reference_answers
         )
 
         # Calculate average score
