@@ -131,6 +131,7 @@ export default function App() {
         startTextRef.current = activeAnswerTextRef.current; // set baseline text
 
         recognition.onresult = (event) => {
+          if (!isListeningRef.current) return;
           let transcript = '';
           for (let i = 0; i < event.results.length; ++i) {
             transcript += event.results[i][0].transcript;
@@ -318,7 +319,11 @@ export default function App() {
 
   // Start Interview Simulation (POST /api/interview/start)
   const handleStartInterview = async () => {
-    if (!candidateId || !resumeData) return;
+    if (!candidateId) {
+      alert("Database Connection Error: MySQL database is not connected. Please make sure MySQL is running and properly configured in db_helper.py.");
+      return;
+    }
+    if (!resumeData) return;
 
     setIsParsing(true); // show loader
     try {
@@ -705,6 +710,15 @@ export default function App() {
                 <RefreshCw size={18} /> Re-Upload
               </button>
             </div>
+
+            {!candidateId && (
+              <div className="glass-card" style={{ borderColor: 'var(--danger)', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', marginBottom: '20px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <AlertCircle size={20} />
+                <div>
+                  <strong>Database Offline:</strong> Connection to MySQL database failed. You will not be able to start or save the interview. Please ensure your MySQL server is running and configured correctly in <code>db_helper.py</code>.
+                </div>
+              </div>
+            )}
 
             <div className="screening-container">
               {/* Profile Card */}

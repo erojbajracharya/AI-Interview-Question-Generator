@@ -274,16 +274,20 @@ def submit_interview():
         )
 
         # Calculate average score
+        import re
         total_score = 0.0
         for eval_str in evaluations:
-            try:
-                score_part = eval_str.split("Score:")[1].split("/10")[0].strip()
-                total_score += float(score_part)
-            except Exception:
+            match = re.search(r'Score[^\d]*(\d+(?:\.\d+)?)\s*/\s*10', eval_str, re.IGNORECASE)
+            if match:
+                try:
+                    total_score += float(match.group(1))
+                except ValueError:
+                    total_score += 5.0
+            else:
                 # default to 5/10 if score can't be parsed
                 total_score += 5.0
                 
-        avg_score = round(total_score / len(answers), 1) if answers else 0.0
+        avg_score = round(total_score / len(evaluations), 1) if evaluations else 0.0
         
         # Recommendations status
         if avg_score >= 8.0:
