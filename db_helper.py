@@ -17,7 +17,7 @@ from datetime import datetime
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "afno mysql password hala",        # ← Set your MySQL root password here
+    "password": "keep your mysql root password",        # ← Set your MySQL root password here
     "database": "ai_interview_db"
 }
 

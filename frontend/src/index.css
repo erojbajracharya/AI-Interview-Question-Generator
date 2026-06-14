@@ -106,6 +106,7 @@ body {
   width: 100vw;
   height: 100vh;
   background-color: var(--bg-main);
+  color: var(--text-main);
   position: relative;
 }
 
@@ -132,9 +133,7 @@ body {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #fff 30%, var(--primary) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #ffffff;
 }
 .sidebar-logo-icon {
   color: var(--primary);
@@ -1050,9 +1049,7 @@ body {
 }
 
 .app-container.light-mode .sidebar-logo h1 {
-  background: linear-gradient(135deg, #0f172a 30%, var(--primary) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #4c1d95;
 }
 
 .app-container.light-mode .content-header h2 {

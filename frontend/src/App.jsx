@@ -522,10 +522,8 @@ export default function App() {
       {/* Sidebar Navigation */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <Award size={32} />
-          </div>
-          <h1>AI INTERVIEWER</h1>
+          <img src="/company-logo-trans.png" alt="EPSSN Logo" style={{ height: '32px', width: 'auto', objectFit: 'contain' }} />
+          <h1>EPSSN</h1>
         </div>
 
         <ul className="nav-menu">
