@@ -981,3 +981,90 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Light Mode overrides */
+.app-container.light-mode {
+  --bg-main: #ffffff;
+  --bg-sidebar: #f8fafc;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border-hover: rgba(15, 23, 42, 0.15);
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --primary-glow: rgba(99, 102, 241, 0.1);
+  --secondary-glow: rgba(20, 184, 166, 0.1);
+}
+
+.app-container.light-mode .input-text,
+.app-container.light-mode .select-box,
+.app-container.light-mode .textarea-box {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+
+.app-container.light-mode .select-box option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.app-container.light-mode .chat-window {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.app-container.light-mode .chat-header {
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+.app-container.light-mode .chat-input-area {
+  background: rgba(255, 255, 255, 0.7);
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+.app-container.light-mode .chat-input-box {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+
+.app-container.light-mode .eval-answer-block {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.app-container.light-mode .history-table th {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.app-container.light-mode .history-table tr:hover {
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.app-container.light-mode .glow-1 {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0) 70%);
+}
+
+.app-container.light-mode .glow-2 {
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.05) 0%, rgba(20, 184, 166, 0) 70%);
+}
+
+.app-container.light-mode .sidebar-logo h1 {
+  background: linear-gradient(135deg, #0f172a 30%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.app-container.light-mode .content-header h2 {
+  background: linear-gradient(to right, #0f172a, var(--text-muted));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.app-container.light-mode .loading-text h3 {
+  color: #0f172a;
+}
+
+.app-container.light-mode .loading-overlay {
+  background: rgba(255, 255, 255, 0.85);
+}

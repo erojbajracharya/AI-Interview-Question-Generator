@@ -20,7 +20,9 @@ import {
   MicOff,
   Send,
   Volume2,
-  Cpu
+  Cpu,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -28,6 +30,12 @@ const API_BASE = 'http://localhost:5000/api';
 export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('setup'); // 'setup', 'screening', 'interview', 'evaluation', 'history'
+  
+  // Theme state
+  const [theme, setTheme] = useState('dark');
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
   
   // Settings & Configuration state
   const [roles, setRoles] = useState([]);
@@ -504,7 +512,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${theme}-mode`}>
       {/* Background neon meshes */}
       <div className="mesh-bg">
         <div className="glow-1"></div>
@@ -572,6 +580,23 @@ export default function App() {
         </ul>
 
         <div className="sidebar-footer">
+          <button
+            onClick={toggleTheme}
+            type="button"
+            className="btn btn-secondary"
+            style={{
+              width: '100%',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '10px'
+            }}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </button>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: Database Ready</p>
         </div>
       </aside>
