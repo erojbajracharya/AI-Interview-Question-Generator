@@ -11,11 +11,11 @@ A linear regression model predicts the overall match score:
   match_score = w1*X1 + w2*X2 + w3*X3 + bias
 
 The weights were chosen to reflect hiring priorities:
-  - Hard skills matter the most  (50%)
-  - Experience matters next      (30%)
-  - Soft skills round it out     (20%)
+  - Hard skills matter the most  (70%)
+  - Experience matters next      (20%)
+  - Soft skills round it out     (10%)
 
-Threshold: >= 40% -> PASS, < 40% -> REJECT
+Threshold: >= 50% -> PASS, < 50% -> REJECT
 """
 
 import numpy as np
@@ -24,11 +24,14 @@ from job_roles import JOB_ROLES
 
 # ── Linear Regression Coefficients ──────────────────────────────
 # These represent a pre-trained linear regression: y = X @ W + b
-# Weights reflect typical hiring priorities.
-WEIGHTS = np.array([0.50, 0.20, 0.30])   # [hard, soft, experience]
+# Weights reflect typical hiring priorities:
+# - Hard skills matter the most  (70%)
+# - Experience matters next      (20%)
+# - Soft skills round it out     (10%)
+WEIGHTS = np.array([0.70, 0.10, 0.20])   # [hard, soft, experience]
 BIAS = 0.0                                # no artificial boost
 
-PASS_THRESHOLD = 0.40  # 40%
+PASS_THRESHOLD = 0.50  # 50% match required to pass
 
 
 def _compute_features(resume_data: dict, role_key: str = None, role_dict: dict = None) -> dict:
@@ -37,10 +40,7 @@ def _compute_features(resume_data: dict, role_key: str = None, role_dict: dict =
     and a target job role.
 
     Accepts either role_key (for predefined JOB_ROLES) or role_dict (for custom roles).
-    For custom roles without a reference skills list, hard/soft ratios use the candidate's
-    own skills as a self-reference (always 1.0), and experience uses generic thresholds.
-
-    Returns a dict with individual ratios and the feature vector.
+    If no skills are provided for a role, matching uses a baseline to avoid 100% inflation.
     """
     role = role_dict or (JOB_ROLES.get(role_key) if role_key else None)
 
@@ -48,26 +48,25 @@ def _compute_features(resume_data: dict, role_key: str = None, role_dict: dict =
     candidate_soft = set(s.lower() for s in resume_data.get("soft_skills", []))
 
     if role and role.get("hard_skills"):
-        # ── 1. Hard-skill match ratio (predefined role) ─────────
+        # ── 1. Hard-skill match ratio ──────────────────────────
         required_hard = set(s.lower() for s in role["hard_skills"])
         hard_matched = required_hard & candidate_hard
         hard_ratio = len(hard_matched) / len(required_hard) if required_hard else 0.0
     else:
-        # Custom role: no reference list — treat all extracted skills as matched
-        required_hard = candidate_hard
-        hard_matched = candidate_hard
-        hard_ratio = 1.0
+        # No reference list provided (custom role or empty list)
+        required_hard = set()
+        hard_matched = set()
+        hard_ratio = 0.0
 
     if role and role.get("soft_skills"):
-        # ── 2. Soft-skill match ratio (predefined role) ─────────
+        # ── 2. Soft-skill match ratio ──────────────────────────
         required_soft = set(s.lower() for s in role["soft_skills"])
         soft_matched = required_soft & candidate_soft
         soft_ratio = len(soft_matched) / len(required_soft) if required_soft else 0.0
     else:
-        # Custom role: no reference list — treat all extracted skills as matched
-        required_soft = candidate_soft
-        soft_matched = candidate_soft
-        soft_ratio = 1.0
+        required_soft = set()
+        soft_matched = set()
+        soft_ratio = 0.0
 
     # ── 3. Experience match ratio ───────────────────────────────
     if role and role.get("experience_requirements"):

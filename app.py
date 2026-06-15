@@ -48,16 +48,19 @@ def screen_resume():
     role_key = request.form.get("role_key") or None
     role_title = request.form.get("role_title") or None
     
-    # Resolve role — use predefined title/thresholds if available, but never use hardcoded skill lists
+    # Resolve role — use predefined title/thresholds if available
     role_info = JOB_ROLES.get(role_key) if role_key else None
     if not role_info and not role_title:
         return jsonify({"success": False, "error": "Must provide either a valid role_key or a role_title."}), 400
+    
     if role_info:
         role_title = role_info["title"]
+        # Use the actual role_info for screening
+        role_dict_for_screening = role_info
     else:
         role_key = None  # no matching predefined role
-    # Always use a skill-free dict so screening uses self-referenced resume skills
-    role_dict_for_screening = {"title": role_title, "hard_skills": [], "soft_skills": []}
+        # For custom roles, use a skill-free dict so screening uses self-referenced resume skills
+        role_dict_for_screening = {"title": role_title, "hard_skills": [], "soft_skills": []}
         
     if file.filename == "":
         return jsonify({"success": False, "error": "No selected file."}), 400

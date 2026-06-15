@@ -297,21 +297,11 @@ export default function App() {
       alert('Please select a job role.');
       return;
     }
-    if (selectedRoleKey === '__custom__' && !customRoleTitle.trim()) {
-      alert('Please enter a custom job role title.');
-      return;
-    }
 
     setIsParsing(true);
     const formData = new FormData();
     formData.append('file', selectedFile);
-    // Send role_key for predefined roles, or role_title for custom
-    const isCustomRole = selectedRoleKey === '__custom__';
-    if (isCustomRole) {
-      formData.append('role_title', customRoleTitle.trim());
-    } else {
-      formData.append('role_key', selectedRoleKey);
-    }
+    formData.append('role_key', selectedRoleKey);
 
     try {
       const response = await fetch(`${API_BASE}/screen`, {
@@ -667,19 +657,7 @@ export default function App() {
                     {roles.map((r) => (
                       <option key={r.key} value={r.key}>{r.title}</option>
                     ))}
-                    <option value="__custom__">Other / Custom Role...</option>
                   </select>
-                  {selectedRoleKey === '__custom__' && (
-                    <input
-                      type="text"
-                      className="input-text"
-                      placeholder="e.g. Nurse, Teacher, Lawyer..."
-                      value={customRoleTitle}
-                      onChange={(e) => setCustomRoleTitle(e.target.value)}
-                      style={{ marginTop: '10px' }}
-                      required
-                    />
-                  )}
                 </div>
 
                 <div className="form-group">
