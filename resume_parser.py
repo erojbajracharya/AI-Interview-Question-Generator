@@ -1,286 +1,192 @@
 # resume_parser.py
+import os
 import re
-import difflib
-import PyPDF2
-import spacy
-from spacy.matcher import PhraseMatcher
+import json
+import pymupdf4llm
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+from typing import List
+
 from job_roles import JOB_ROLES
+import api_rotator
 
 
-def extract_text_from_pdf(pdf_path):
-    """Extracts all text content from a PDF file."""
-    text = ""
-    try:
-        with open(pdf_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-    except Exception as e:
-        print(f"Error reading PDF: {e}")
-    return text
+class ResumeProfile(BaseModel):
+    is_resume: bool
+    hard_skills: List[str]
+    soft_skills: List[str]
+    experience_years: float
+
+
+def _extract_explicit_months(text):
+    """Try to infer exact month-based experience durations from the resume text."""
+    text_lower = text.lower()
+
+    # Prefer explicit total experience patterns first.
+    month_unit = r'(?:months?|mos?|mo\.?)'
+    patterns = [
+        r'experience\s*[:\-]?\s*(\d+)\s*(?:[-\s]?' + month_unit + r')',
+        r'(\d+)\s*(?:[-\s]?' + month_unit + r')\s*(?:of\s*)?experience',
+        r'^(\d+)\s*(?:[-\s]?' + month_unit + r')\b',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text_lower, re.MULTILINE)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                continue
+
+    # Support spelled-out month numbers like "six months".
+    word_to_number = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+    }
+
+    word_pattern = re.search(
+        r'\b(' + '|'.join(word_to_number.keys()) + r')(?:[-\s]?' + month_unit + r')\b',
+        text_lower
+    )
+    if word_pattern:
+        return word_to_number.get(word_pattern.group(1), None)
+
+    # Support common half-year phrasing.
+    if re.search(r'\bhalf(?:[-\s]+year|\s+year)\b', text_lower):
+        return 6
+
+    # Fallback: look for any numeric month mentions.
+    match = re.search(r'(\d+)\s*(?:[-\s]?months?|[-\s]?mos?)', text_lower)
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:
+            pass
+
+    return None
+
+
+def _normalize_experience_years(experience_years, text):
+    """Normalize extracted experience by using exact month text when available."""
+    if experience_years is None:
+        return 0.0
+
+    if experience_years < 1.0:
+        explicit_months = _extract_explicit_months(text)
+        if explicit_months is not None:
+            return explicit_months / 12.0
+
+    return experience_years
+
+
+def convert_pdf_to_md(pdf_path):
+    """Converts a PDF file to a Markdown (.md) file next to the original PDF."""
+    md_content = pymupdf4llm.to_markdown(pdf_path)
+    md_path = os.path.splitext(pdf_path)[0] + ".md"
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(md_content)
+    return md_path
 
 
 def parse_text(text):
-    """Parses raw resume text to extract hard/soft skills and estimate experience years."""
-    try:
-        nlp = spacy.load("en_core_web_sm")
-    except Exception as e:
-        raise RuntimeError("spaCy model 'en_core_web_sm' is required. Install it with: python -m spacy download en_core_web_sm") from e
-
-    doc = nlp(text)
-
-    extracted_hard_skills = set()
-    extracted_soft_skills = set()
-
-    all_hard_skills = []
-    all_soft_skills = []
+    """Parses resume text using the Gemini API with key rotation and structured JSON output."""
+    # Gather canonical skills list from JOB_ROLES
+    all_hard_skills = set()
+    all_soft_skills = set()
     for role_info in JOB_ROLES.values():
-        all_hard_skills.extend(role_info["hard_skills"])
-        all_soft_skills.extend(role_info["soft_skills"])
+        all_hard_skills.update(role_info["hard_skills"])
+        all_soft_skills.update(role_info["soft_skills"])
 
-    # Build canonical mapping for normalization: lower -> canonical
-    canonical_hard = {s.lower(): s for s in set(all_hard_skills)}
-    canonical_soft = {s.lower(): s for s in set(all_soft_skills)}
-    vocab_hard_keys = list(canonical_hard.keys())
-    vocab_soft_keys = list(canonical_soft.keys())
+    canonical_hard = sorted(list(all_hard_skills))
+    canonical_soft = sorted(list(all_soft_skills))
 
-    matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
-    hard_patterns = [nlp.make_doc(skill) for skill in set(all_hard_skills)]
-    soft_patterns = [nlp.make_doc(skill) for skill in set(all_soft_skills)]
-    matcher.add("HARD_SKILLS", None, *hard_patterns)
-    matcher.add("SOFT_SKILLS", None, *soft_patterns)
-    matches = matcher(doc)
-    for match_id, start, end in matches:
-        label = nlp.vocab.strings[match_id]
-        skill_text = doc[start:end].text
-        key = skill_text.lower()
-        # Normalize to canonical if available, otherwise fuzzy match
-        if label == "HARD_SKILLS":
-            if key in canonical_hard:
-                extracted_hard_skills.add(canonical_hard[key])
+    rotator = api_rotator.get_rotator()
+    rotator.reset()
+    keys = api_rotator.get_all_keys()
+    
+    # Check if we have any non-empty keys
+    valid_keys = [k for k in keys if k and k.strip()]
+    if not valid_keys:
+        raise ValueError("No valid Gemini API keys configured.")
+
+    prompt = (
+        f"Determine if the following text is a resume/CV. If the text is clearly not a resume or CV (e.g. it is a completely unrelated document, blank, random noise, or general text with no resume-like details such as work history, skills, contact info, or education), set `is_resume` to false.\n"
+        f"Extract resume data from the following Markdown text.\n"
+        f"In your extraction, normalize the extracted skills to match these canonical lists if they refer to the same concept (case-insensitive):\n"
+        f"Canonical Hard Skills: {', '.join(canonical_hard)}\n"
+        f"Canonical Soft Skills: {', '.join(canonical_soft)}\n\n"
+        f"Resume Markdown:\n"
+        f"{text}"
+    )
+
+    for attempt in range(len(keys)):
+        api_key = rotator.get_current_key()
+        if not api_key or not api_key.strip():
+            # Skip empty keys
+            rotator.mark_failed(api_key)
+            if attempt < len(keys) - 1:
+                rotator.rotate()
+            continue
+
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ResumeProfile,
+                ),
+            )
+            data = json.loads(response.text)
+            if not data.get("is_resume", True):
+                print("[Resume Parser] Error: The uploaded file is not a resume.")
+                raise ValueError("The uploaded file does not appear to be a valid resume.")
+                
+            extracted_years = float(data.get("experience_years", 0.0))
+            normalized_years = _normalize_experience_years(extracted_years, text)
+            return {
+                "hard_skills": data.get("hard_skills", []),
+                "soft_skills": data.get("soft_skills", []),
+                "experience_years": normalized_years,
+            }
+        except Exception as e:
+            if "The uploaded file does not appear to be a valid resume" in str(e):
+                raise e
+            print(f"[Resume Parser] Gemini API key attempt {attempt + 1} failed: {e}")
+            rotator.mark_failed(api_key)
+            if attempt < len(keys) - 1:
+                rotator.rotate()
+                print(f"[Resume Parser] Rotating to next API key...")
             else:
-                best = difflib.get_close_matches(key, vocab_hard_keys, n=1, cutoff=0.85)
-                extracted_hard_skills.add(canonical_hard[best[0]] if best else skill_text)
-        elif label == "SOFT_SKILLS":
-            if key in canonical_soft:
-                extracted_soft_skills.add(canonical_soft[key])
-            else:
-                best = difflib.get_close_matches(key, vocab_soft_keys, n=1, cutoff=0.85)
-                extracted_soft_skills.add(canonical_soft[best[0]] if best else skill_text)
+                raise ValueError(f"All API keys failed. Last error: {e}")
 
-    # Additional extraction from explicit Skills / Technical Skills sections (higher precision)
-    def extract_from_skills_section(text, headers):
-        t_low = text.lower()
-        start_idx = -1
-        for h in headers:
-            m = re.search(r'\n' + h + r'\b', t_low)
-            if m:
-                start_idx = m.end()
-                break
-        if start_idx == -1:
-            return []
-        # find next section header
-        end_headers = [r'\nexperience\b', r'\neducation\b', r'\nprojects\b', r'\ncertifications\b', r'\nwork\b']
-        end_idx = len(text)
-        for eh in end_headers:
-            ems = list(re.finditer(eh, t_low))
-            for em in ems:
-                if em.start() > start_idx and em.start() < end_idx:
-                    end_idx = em.start()
-        section = text[start_idx:end_idx]
-        # split by newlines, commas, semicolons
-        candidates = re.split(r'[\n,;•·\u2022]', section)
-        items = []
-        for c in candidates:
-            s = c.strip()
-            if not s:
-                continue
-            # remove trailing descriptors in parentheses
-            s = re.sub(r'\([^)]*\)', '', s).strip()
-            items.append(s)
-        return items
-
-    skills_headers = ['technical skills', 'skills', 'skills & tools', 'technical expertise']
-    skills_items = extract_from_skills_section(text, skills_headers)
-    for item in skills_items:
-        key = item.lower()
-        # exact or fuzzy match against hard skills first, then soft
-        if key in canonical_hard:
-            extracted_hard_skills.add(canonical_hard[key])
-            continue
-        best_h = difflib.get_close_matches(key, vocab_hard_keys, n=1, cutoff=0.78)
-        if best_h:
-            extracted_hard_skills.add(canonical_hard[best_h[0]])
-            continue
-        if key in canonical_soft:
-            extracted_soft_skills.add(canonical_soft[key])
-            continue
-        best_s = difflib.get_close_matches(key, vocab_soft_keys, n=1, cutoff=0.78)
-        if best_s:
-            extracted_soft_skills.add(canonical_soft[best_s[0]])
-
-    # EXPERIENCE section extraction for experience estimation
-    text_lower = text.lower()
-    exp_headers = [
-        r'\nprofessional\s+experience\b',
-        r'\nwork\s+experience\b',
-        r'\nemployment\s+history\b',
-        r'\nexperience\b'
-    ]
-    start_idx = -1
-    for header in exp_headers:
-        match = re.search(header, text_lower)
-        if match:
-            start_idx = match.end()
-            break
-
-    exp_section = ""
-    if start_idx != -1:
-        end_headers = [
-            r'\nprojects\b',
-            r'\neducation\b',
-            r'\ntechnical\s+skills\b',
-            r'\nsoft\s+skills\b',
-            r'\nskills\b',
-            r'\ncertifications\b',
-            r'\nawards\b',
-            r'\npublications\b',
-            r'\nlanguages\b',
-            r'\nprofessional\s+summary\b',
-            r'\nsummary\b'
-        ]
-        end_idx = len(text)
-        for header in end_headers:
-            matches = list(re.finditer(header, text_lower))
-            for m in matches:
-                if m.start() > start_idx and m.start() < end_idx:
-                    end_idx = m.start()
-        exp_section = text[start_idx:end_idx]
-
-    experience_years = 0
-    if exp_section:
-        exp_patterns = [
-            r'(\d+)\s*\+?\s*years?\s+(?:of\s+)?experience',
-            r'experience\s*:\s*(\d+)\s*years?',
-            r'(\d+)\s*yrs?'
-        ]
-        matches = []
-        for pattern in exp_patterns:
-            matches.extend(re.findall(pattern, exp_section.lower()))
-        if matches:
-            try:
-                experience_years = max(int(m) for m in matches if int(m) < 40)
-            except ValueError:
-                pass
-
-        months_map = {
-            'jan': 1, 'january': 1,
-            'feb': 2, 'february': 2,
-            'mar': 3, 'march': 3,
-            'apr': 4, 'april': 4,
-            'may': 5,
-            'jun': 6, 'june': 6,
-            'jul': 7, 'july': 7,
-            'aug': 8, 'august': 8,
-            'sep': 9, 'september': 9,
-            'oct': 10, 'october': 10,
-            'nov': 11, 'november': 11,
-            'dec': 12, 'december': 12
-        }
-
-        current_dt = __import__('datetime').datetime.now()
-        current_year = current_dt.year
-        current_month = current_dt.month
-
-        def ym_to_index(y, m):
-            return int(y) * 12 + int(m) - 1
-
-        ranges = []
-
-        month_regex = r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})\b\s*[-–—]\s*\b(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})|(present|current))\b'
-        for m in re.findall(month_regex, exp_section.lower()):
-            start_m, start_y, end_m, end_y, present = m
-            try:
-                s_year = int(start_y)
-                s_month = months_map.get(start_m, 1)
-                if present in ['present', 'current']:
-                    e_year = current_year
-                    e_month = current_month
-                else:
-                    e_year = int(end_y)
-                    e_month = months_map.get(end_m, 1)
-                s_idx = ym_to_index(s_year, s_month)
-                e_idx = ym_to_index(e_year, e_month)
-                if e_idx >= s_idx:
-                    ranges.append((s_idx, e_idx))
-            except Exception:
-                continue
-
-        year_regex = r'\b(19\d{2}|20\d{2})\b\s*[-–—]\s*\b(19\d{2}|20\d{2}|present|current)\b'
-        for start_yr, end_yr in re.findall(year_regex, exp_section.lower()):
-            try:
-                s_year = int(start_yr)
-                if end_yr in ['present', 'current']:
-                    e_year = current_year
-                    e_month = current_month
-                    e_idx = ym_to_index(e_year, e_month)
-                else:
-                    e_year = int(end_yr)
-                    e_idx = ym_to_index(e_year, 1)
-                s_idx = ym_to_index(s_year, 1)
-                if e_idx >= s_idx:
-                    ranges.append((s_idx, e_idx))
-            except Exception:
-                continue
-
-        for ent in doc.ents:
-            if ent.label_ == 'DATE' and '-' in ent.text:
-                t = ent.text.lower()
-                m = re.findall(month_regex, t)
-                if m:
-                    for mm in m:
-                        start_m, start_y, end_m, end_y, present = mm
-                        try:
-                            s_year = int(start_y)
-                            s_month = months_map.get(start_m, 1)
-                            if present in ['present', 'current']:
-                                e_year = current_year
-                                e_month = current_month
-                            else:
-                                e_year = int(end_y)
-                                e_month = months_map.get(end_m, 1)
-                            s_idx = ym_to_index(s_year, s_month)
-                            e_idx = ym_to_index(e_year, e_month)
-                            if e_idx >= s_idx:
-                                ranges.append((s_idx, e_idx))
-                        except Exception:
-                            continue
-
-        total_months = 0
-        if ranges:
-            ranges.sort()
-            merged = [list(ranges[0])]
-            for s, e in ranges[1:]:
-                if s <= merged[-1][1] + 1:
-                    merged[-1][1] = max(merged[-1][1], e)
-                else:
-                    merged.append([s, e])
-            for s, e in merged:
-                total_months += max(1, e - s)
-        calculated_exp = round(total_months / 12.0, 1)
-
-        experience_years = max(experience_years, calculated_exp)
-
-    return {
-        "hard_skills": list(extracted_hard_skills),
-        "soft_skills": list(extracted_soft_skills),
-        "experience_years": experience_years,
-    }
+    raise ValueError("All API keys failed.")
 
 
 def parse_resume(pdf_path):
-    """Convenience wrapper: extract text from PDF and parse it."""
-    text = extract_text_from_pdf(pdf_path)
-    return parse_text(text)
+    """Convenience wrapper: convert PDF to Markdown file, parse, and clean up."""
+    md_path = None
+    try:
+        md_path = convert_pdf_to_md(pdf_path)
+        with open(md_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        return parse_text(text)
+    finally:
+        if md_path and os.path.exists(md_path):
+            try:
+                os.remove(md_path)
+            except Exception as e:
+                print(f"[Resume Parser] Error cleaning up temporary markdown file: {e}")
+

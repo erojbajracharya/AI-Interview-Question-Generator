@@ -1,6 +1,5 @@
 # app.py
 import os
-import shutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -46,10 +45,19 @@ def screen_resume():
         return jsonify({"success": False, "error": "No file uploaded."}), 400
         
     file = request.files["file"]
-    role_key = request.form.get("role_key")
+    role_key = request.form.get("role_key") or None
+    role_title = request.form.get("role_title") or None
     
-    if not role_key or role_key not in JOB_ROLES:
-        return jsonify({"success": False, "error": f"Invalid or missing role_key: {role_key}"}), 400
+    # Resolve role — use predefined title/thresholds if available, but never use hardcoded skill lists
+    role_info = JOB_ROLES.get(role_key) if role_key else None
+    if not role_info and not role_title:
+        return jsonify({"success": False, "error": "Must provide either a valid role_key or a role_title."}), 400
+    if role_info:
+        role_title = role_info["title"]
+    else:
+        role_key = None  # no matching predefined role
+    # Always use a skill-free dict so screening uses self-referenced resume skills
+    role_dict_for_screening = {"title": role_title, "hard_skills": [], "soft_skills": []}
         
     if file.filename == "":
         return jsonify({"success": False, "error": "No selected file."}), 400
@@ -66,11 +74,10 @@ def screen_resume():
         
         # Determine difficulty based on experience years and role thresholds
         difficulty = QUESTION_MODULE.determine_difficulty(resume_data["experience_years"], role_key)
-        role_title = JOB_ROLES[role_key]["title"]
         
         resume_data.update({
             "difficulty": difficulty,
-            "role_key": role_key,
+            "role_key": role_key or "custom",
             "role_title": role_title
         })
         
@@ -89,8 +96,8 @@ def screen_resume():
         if candidate_id:
             DB_MODULE.save_skills(candidate_id, resume_data["hard_skills"], resume_data["soft_skills"])
             
-        # Screen resume using simple linear regression
-        screening_result = SCREENER_MODULE.screen_resume(resume_data, role_key)
+        # Screen resume using simple linear regression (always dynamic: self-referenced skills)
+        screening_result = SCREENER_MODULE.screen_resume(resume_data, role_key=role_key, role_dict=role_dict_for_screening)
         report_text = SCREENER_MODULE.format_screening_report(screening_result, role_title)
         
         response_data = {
@@ -137,17 +144,20 @@ def start_interview():
     """Generates questions using AI or loads previously saved questions from DB."""
     data = request.json or {}
     candidate_id = data.get("candidate_id")
-    role_key = data.get("role_key")
+    role_key = data.get("role_key") or None
+    role_title = data.get("role_title") or None
     difficulty = data.get("difficulty")
     num_questions = int(data.get("num_questions", 5))
     source = data.get("source", "ai") # "ai" or "db"
     save_to_db = data.get("save_to_db", True)
 
-    if not role_key or role_key not in JOB_ROLES:
-        return jsonify({"success": False, "error": "Invalid role_key"}), 400
-        
-    role_info = JOB_ROLES[role_key]
-    role_title = role_info["title"]
+    # Resolve role — use predefined title/thresholds if available, but never use hardcoded skill lists
+    role_info = JOB_ROLES.get(role_key) if role_key else None
+    if not role_info and not role_title:
+        return jsonify({"success": False, "error": "Must provide either a valid role_key or a role_title."}), 400
+    if role_info:
+        role_title = role_info["title"]
+    # role_info no longer used for skills — questions are always generated dynamically via role_title
     
     # Mock resume_data if we don't pass all details
     experience_years = float(data.get("experience_years", 0))
@@ -171,9 +181,10 @@ def start_interview():
         try:
             raw_qs = QUESTION_MODULE.generate_questions(
                 resume_data,
-                role_key,
-                difficulty,
-                num_questions=num_questions
+                role_key=role_key,
+                difficulty=difficulty,
+                num_questions=num_questions,
+                role_title=role_title
             )
             if raw_qs:
                 ai_success = True
@@ -194,14 +205,13 @@ def start_interview():
         ]
         
     if not questions_data:
-        # Fallback: generate generic placeholder questions if both AI and DB failed
-        # This ensures the interview simulation UI always has at least some content to display.
+        # Fallback: generate field-specific placeholder questions if both AI and DB failed
         placeholder_questions = [
-            "Tell me about yourself and your professional background.",
-            "Why are you interested in this role and our company?",
-            "Describe a challenging project you worked on and how you overcame obstacles.",
-            "How do you stay updated with industry trends and technologies?",
-            "What are your greatest strengths and areas for improvement?"
+            f"Tell me about your experience relevant to {role_title} and how it prepared you for this position.",
+            f"What are the top challenges in {role_title} work, and how would you approach them?",
+            f"Describe a project or task you've completed that is closely related to {role_title}.",
+            f"Which tools, techniques, or processes do you rely on most when working in {role_title}?",
+            f"How do you stay current with best practices and trends in {role_title}?"
         ]
         # Limit to the requested number of questions
         placeholder_questions = placeholder_questions[:num_questions]
@@ -250,14 +260,19 @@ def submit_interview():
     session_id = data.get("session_id")
     questions = data.get("questions", []) # list of {"question_id": ..., "question_text": ..., "reference_answer": ...}
     answers = data.get("answers", []) # list of string responses
-    role_key = data.get("role_key")
+    role_key = data.get("role_key") or None
+    role_title = data.get("role_title") or None
     difficulty = data.get("difficulty")
     hard_skills = data.get("hard_skills", [])
 
-    if not role_key or role_key not in JOB_ROLES:
-        return jsonify({"success": False, "error": "Invalid or missing role_key."}), 400
-
-    role_info = JOB_ROLES[role_key]
+    # Resolve role — use predefined title if available, never use hardcoded skill lists
+    predefined = JOB_ROLES.get(role_key) if role_key else None
+    if predefined:
+        role_title = predefined["title"]
+    elif not role_title:
+        return jsonify({"success": False, "error": "Must provide either a valid role_key or a role_title."}), 400
+    # Always build a title-only role dict so grading is fully dynamic
+    role_info = {"title": role_title, "hard_skills": [], "soft_skills": []}
     
     question_texts = [q["question_text"] for q in questions]
     question_ids = [q["question_id"] for q in questions]

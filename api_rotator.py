@@ -31,10 +31,6 @@ class APIRotator:
         """Get list of all available API keys."""
         return API_KEYS
     
-    def get_keys_list(self):
-        """Get API keys as comma-separated string."""
-        return ",".join(API_KEYS)
-    
     def reset(self):
         """Reset the rotator to the first key."""
         self.current_index = 0
@@ -48,16 +44,6 @@ _rotator = APIRotator()
 def get_rotator():
     """Get the global API rotator instance."""
     return _rotator
-
-
-def get_current_key():
-    """Get the current API key."""
-    return _rotator.get_current_key()
-
-
-def rotate_key():
-    """Rotate to the next API key and return it."""
-    return _rotator.rotate()
 
 
 def get_all_keys():

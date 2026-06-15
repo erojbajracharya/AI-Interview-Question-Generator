@@ -1,28 +1,34 @@
 # question_generator.py
-import os
 import re
 from job_roles import JOB_ROLES
 import api_rotator
 
-def determine_difficulty(experience_years, role_key):
-    """Determines difficulty level based on years of experience and role thresholds."""
-    role = JOB_ROLES.get(role_key)
-    if not role:
-        return "beginner"
-    
-    reqs = role["experience_requirements"]
-    if experience_years >= reqs["expert"]:
+def determine_difficulty(experience_years, role_key=None):
+    """Determines difficulty level based on years of experience and optional role thresholds."""
+    if role_key:
+        role = JOB_ROLES.get(role_key)
+        if role:
+            reqs = role["experience_requirements"]
+            if experience_years >= reqs["expert"]:
+                return "expert"
+            elif experience_years >= reqs["intermediate"]:
+                return "intermediate"
+            else:
+                return "beginner"
+    # Generic thresholds for custom roles
+    if experience_years >= 5:
         return "expert"
-    elif experience_years >= reqs["intermediate"]:
+    elif experience_years >= 3:
         return "intermediate"
     else:
         return "beginner"
 
-def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
+def generate_questions(skills_profile, role_key=None, difficulty="beginner", num_questions=5, role_title=None):
     """Generates interview questions based on skills, role, and difficulty level using Gemini API with automatic key rotation."""
-    role = JOB_ROLES.get(role_key)
-    if not role:
-        return []
+    # Resolve role title — prefer explicit role_title, fall back to JOB_ROLES lookup
+    if not role_title:
+        role = JOB_ROLES.get(role_key) if role_key else None
+        role_title = role["title"] if role else (role_key or "the specified role")
     
     from google import genai
     
@@ -36,9 +42,10 @@ def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
             client = genai.Client(api_key=api_key)
             
             prompt = (
-                f"You are a hiring manager interviewing for {role['title']} ({difficulty} level).\n"
+                f"You are a hiring manager interviewing for {role_title} ({difficulty} level).\n"
                 f"Candidate: {skills_profile['experience_years']:g} yrs exp. Skills: {', '.join(skills_profile['hard_skills'] + skills_profile['soft_skills'])}.\n"
-                f"Generate {num_questions} realistic, conversational questions (mix of technical and behavioral scenarios) as in a live interview simulation.\n"
+                f"Generate {num_questions} realistic, conversational questions that are specific to the {role_title} field and the candidate's skills."
+                f" Only ask questions related to this role; do not include generic, unrelated, or cross-disciplinary questions.\n"
                 f"Format: Return only a numbered list, one question per line, no extra text."
             )
             
@@ -69,3 +76,4 @@ def generate_questions(skills_profile, role_key, difficulty, num_questions=5):
                 raise ValueError(f"All API keys failed. Last error: {e}")
     
     return []
+

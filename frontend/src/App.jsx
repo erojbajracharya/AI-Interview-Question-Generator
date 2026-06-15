@@ -40,6 +40,7 @@ export default function App() {
   // Settings & Configuration state
   const [roles, setRoles] = useState([]);
   const [selectedRoleKey, setSelectedRoleKey] = useState('');
+  const [customRoleTitle, setCustomRoleTitle] = useState('');
   const [numQuestions, setNumQuestions] = useState(5);
   const [questionSource, setQuestionSource] = useState('ai'); // 'ai' or 'db'
   const [saveToDb, setSaveToDb] = useState(true);
@@ -195,7 +196,7 @@ export default function App() {
     const y = Number(years);
     if (y <= 0) return '0 months';
     if (y < 1) {
-      const months = Math.max(1, Math.floor(y * 12));
+      const months = Math.max(1, Math.floor(y * 12 + 1e-8));
       return `${months} month${months === 1 ? '' : 's'}`;
     }
     // show integer years if whole number, otherwise one decimal
@@ -296,11 +297,21 @@ export default function App() {
       alert('Please select a job role.');
       return;
     }
+    if (selectedRoleKey === '__custom__' && !customRoleTitle.trim()) {
+      alert('Please enter a custom job role title.');
+      return;
+    }
 
     setIsParsing(true);
     const formData = new FormData();
     formData.append('file', selectedFile);
-    formData.append('role_key', selectedRoleKey);
+    // Send role_key for predefined roles, or role_title for custom
+    const isCustomRole = selectedRoleKey === '__custom__';
+    if (isCustomRole) {
+      formData.append('role_title', customRoleTitle.trim());
+    } else {
+      formData.append('role_key', selectedRoleKey);
+    }
 
     try {
       const response = await fetch(`${API_BASE}/screen`, {
@@ -340,7 +351,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           candidate_id: candidateId,
-          role_key: selectedRoleKey,
+          role_key: resumeData.role_key !== 'custom' ? resumeData.role_key : undefined,
+          role_title: resumeData.role_title,
           difficulty: resumeData.difficulty,
           num_questions: numQuestions,
           source: questionSource,
@@ -413,7 +425,8 @@ export default function App() {
           session_id: sessionData.session_id,
           questions: sessionData.questions,
           answers: finalAnswers,
-          role_key: selectedRoleKey,
+          role_key: resumeData.role_key !== 'custom' ? resumeData.role_key : undefined,
+          role_title: resumeData.role_title,
           difficulty: sessionData.difficulty,
           hard_skills: resumeData.hard_skills
         })
@@ -489,6 +502,7 @@ export default function App() {
     setCandidateAnswers([]);
     setActiveAnswerText('');
     setEvaluationReport(null);
+    setCustomRoleTitle('');
     setActiveTab('setup');
   };
 
@@ -648,12 +662,24 @@ export default function App() {
                   <select
                     className="select-box"
                     value={selectedRoleKey}
-                    onChange={(e) => setSelectedRoleKey(e.target.value)}
+                    onChange={(e) => { setSelectedRoleKey(e.target.value); setCustomRoleTitle(''); }}
                   >
                     {roles.map((r) => (
                       <option key={r.key} value={r.key}>{r.title}</option>
                     ))}
+                    <option value="__custom__">Other / Custom Role...</option>
                   </select>
+                  {selectedRoleKey === '__custom__' && (
+                    <input
+                      type="text"
+                      className="input-text"
+                      placeholder="e.g. Nurse, Teacher, Lawyer..."
+                      value={customRoleTitle}
+                      onChange={(e) => setCustomRoleTitle(e.target.value)}
+                      style={{ marginTop: '10px' }}
+                      required
+                    />
+                  )}
                 </div>
 
                 <div className="form-group">

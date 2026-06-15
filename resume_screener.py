@@ -31,39 +31,53 @@ BIAS = 0.0                                # no artificial boost
 PASS_THRESHOLD = 0.40  # 40%
 
 
-def _compute_features(resume_data: dict, role_key: str) -> dict:
+def _compute_features(resume_data: dict, role_key: str = None, role_dict: dict = None) -> dict:
     """
     Extracts the three regression features from a parsed resume
     and a target job role.
 
+    Accepts either role_key (for predefined JOB_ROLES) or role_dict (for custom roles).
+    For custom roles without a reference skills list, hard/soft ratios use the candidate's
+    own skills as a self-reference (always 1.0), and experience uses generic thresholds.
+
     Returns a dict with individual ratios and the feature vector.
     """
-    role = JOB_ROLES.get(role_key)
-    if not role:
-        raise ValueError(f"Unknown role key: {role_key}")
+    role = role_dict or (JOB_ROLES.get(role_key) if role_key else None)
 
-    # ── 1. Hard-skill match ratio ───────────────────────────────
-    required_hard = set(s.lower() for s in role["hard_skills"])
     candidate_hard = set(s.lower() for s in resume_data.get("hard_skills", []))
-    hard_matched = required_hard & candidate_hard
-    hard_ratio = len(hard_matched) / len(required_hard) if required_hard else 0.0
-
-    # ── 2. Soft-skill match ratio ───────────────────────────────
-    required_soft = set(s.lower() for s in role["soft_skills"])
     candidate_soft = set(s.lower() for s in resume_data.get("soft_skills", []))
-    soft_matched = required_soft & candidate_soft
-    soft_ratio = len(soft_matched) / len(required_soft) if required_soft else 0.0
+
+    if role and role.get("hard_skills"):
+        # ── 1. Hard-skill match ratio (predefined role) ─────────
+        required_hard = set(s.lower() for s in role["hard_skills"])
+        hard_matched = required_hard & candidate_hard
+        hard_ratio = len(hard_matched) / len(required_hard) if required_hard else 0.0
+    else:
+        # Custom role: no reference list — treat all extracted skills as matched
+        required_hard = candidate_hard
+        hard_matched = candidate_hard
+        hard_ratio = 1.0
+
+    if role and role.get("soft_skills"):
+        # ── 2. Soft-skill match ratio (predefined role) ─────────
+        required_soft = set(s.lower() for s in role["soft_skills"])
+        soft_matched = required_soft & candidate_soft
+        soft_ratio = len(soft_matched) / len(required_soft) if required_soft else 0.0
+    else:
+        # Custom role: no reference list — treat all extracted skills as matched
+        required_soft = candidate_soft
+        soft_matched = candidate_soft
+        soft_ratio = 1.0
 
     # ── 3. Experience match ratio ───────────────────────────────
-    exp_reqs = role["experience_requirements"]
-    # Use intermediate as a reasonable baseline expectation
-    expected_exp = exp_reqs.get("intermediate", 2)
-    candidate_exp = resume_data.get("experience_years", 0)
-
-    if expected_exp == 0:
-        exp_ratio = 1.0  # no experience required -> full match
+    if role and role.get("experience_requirements"):
+        exp_reqs = role["experience_requirements"]
+        expected_exp = exp_reqs.get("intermediate", 2)
     else:
-        exp_ratio = min(candidate_exp / expected_exp, 1.0)
+        expected_exp = 2  # generic baseline: 2 years for intermediate
+
+    candidate_exp = resume_data.get("experience_years", 0)
+    exp_ratio = 1.0 if expected_exp == 0 else min(candidate_exp / expected_exp, 1.0)
 
     feature_vector = np.array([hard_ratio, soft_ratio, exp_ratio])
 
@@ -79,14 +93,15 @@ def _compute_features(resume_data: dict, role_key: str) -> dict:
     }
 
 
-def screen_resume(resume_data: dict, role_key: str) -> dict:
+def screen_resume(resume_data: dict, role_key: str = None, role_dict: dict = None) -> dict:
     """
     Screens a parsed resume against a job role using linear regression.
 
     Parameters
     ----------
     resume_data : dict   – output of resume_parser.parse_resume()
-    role_key    : str    – key from JOB_ROLES (e.g. "software_engineer")
+    role_key    : str    – key from JOB_ROLES (e.g. "software_engineer"), optional
+    role_dict   : dict   – custom role info dict, used when role_key is absent
 
     Returns
     -------
@@ -95,7 +110,7 @@ def screen_resume(resume_data: dict, role_key: str) -> dict:
         passed        : bool
         details       : dict of per-feature ratios and matched items
     """
-    details = _compute_features(resume_data, role_key)
+    details = _compute_features(resume_data, role_key=role_key, role_dict=role_dict)
     X = details["features"]
 
     # ── Linear regression prediction ────────────────────────────

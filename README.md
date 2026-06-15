@@ -1,127 +1,125 @@
 [README (1).md](https://github.com/user-attachments/files/28805806/README.1.md)
 
-# Project Title
+# AI-Interview-Question-Generator
 
-A brief description of what this project does and who it's for
+An end-to-end platform for automated resume screening and AI-powered interview question generation. This project uses a Flask backend, a React (Vite) frontend, and MySQL for persistent storage, leveraging Google's Gemini AI for parsing and evaluation.
 
-# AI‑Interview‑Question‑Generator – README (Windows Setup)
+## 🚀 Key Features
 
-## Overview
-This repository provides a Flask backend and a Vite + React frontend for generating AI‑powered interview questions. The steps below let you get the project up‑and‑running on a new Windows laptop.
+- **Automated Resume Parsing:** Converts PDF resumes to Markdown and extracts structured data (skills, experience) using Gemini AI.
+- **Dynamic Resume Screening:** Screens candidates against job roles using a weighted matching algorithm.
+- **AI-Powered Question Generation:** Generates tailored interview questions based on the candidate's profile and the selected job role.
+- **API Key Rotation:** Supports multiple Gemini API keys to handle rate limits seamlessly.
+- **Interview Simulation & Grading:** Conducts mock interviews and provides automated grading with detailed feedback.
+- **Persistent History:** Saves candidate profiles, sessions, and evaluation reports in a MySQL database.
+- **Reusable Question Pool:** Seeds and maintains a pool of high-quality questions for various roles and difficulties.
+
+## 🛠️ Tech Stack
+
+- **Backend:** Python, Flask, Flask-CORS, Google GenAI SDK, PyMuPDF4LLM, MySQL Connector, NumPy.
+- **Frontend:** React 19, Vite, Lucide React (Icons).
+- **Database:** MySQL.
+- **AI Model:** Google Gemini (gemini-2.5-flash).
 
 ---
 
-## 1️⃣ Clone / copy the repository
-```powershell
-# Choose a location, e.g. D:\code
-cd D:\code
-# If you have a remote repository
-git clone https://github.com/your-username/AI-Interview-Question-Generator.git   # replace with your fork
-# Or simply copy the folder if you already have it locally
-```
+## ⚙️ Setup & Installation
 
-## 2️⃣ Install Python (3.10 + recommended)
-- Download from https://www.python.org/downloads/windows/
-- **Check “Add Python to PATH”** during installation.
+### Prerequisites
+- **Python 3.10+**
+- **Node.js v20+**
+- **MySQL Server** (Running locally or accessible via network)
 
-## 3️⃣ Create & activate a virtual environment
-```powershell
-cd AI-Interview-Question-Generator
-python -m venv venv
-.\venv\Scripts\activate   # PowerShell
-# (or `venv\Scripts\activate.bat` from cmd)
-```
+### 1. Database Setup
+1.  Ensure MySQL is running.
+2.  The database `ai_interview_db` and its tables are automatically created on first run by `db_helper.py`.
+3.  **Important:** Open `db_helper.py` and update the `DB_CONFIG` dictionary with your MySQL `user` and `password`.
+    ```python
+    DB_CONFIG = {
+        "host": "localhost",
+        "user": "root",
+        "password": "YOUR_PASSWORD_HERE",
+        "database": "ai_interview_db"
+    }
+    ```
 
-## 4️⃣ Install backend dependencies
-```powershell
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-> Packages include `google-genai, spacy, PyPDF2, mysql-connector-python, numpy, Flask, Flask‑CORS, python‑dotenv`.
+### 2. Backend Setup
+1.  Navigate to the project root:
+    ```powershell
+    cd AI-Interview-Question-Generator
+    ```
+2.  Create and activate a virtual environment:
+    ```powershell
+    python -m venv venv
+    .\venv\Scripts\activate  # Windows
+    # source venv/bin/activate  # Linux/macOS
+    ```
+3.  Install dependencies:
+    ```powershell
+    pip install -r requirements.txt
+    ```
+4.  Configure environment variables. Create a `.env` file in the root:
+    ```env
+    AI_GEN_API_KEYS=key1,key2,key3
+    ```
+    *(You can provide one or more comma-separated Gemini API keys for rotation.)*
 
-## 5️⃣ (Optional) Download the spaCy English model
-```powershell
-python -m spacy download en_core_web_sm
-```
+### 3. Frontend Setup
+1.  Navigate to the `frontend` directory:
+    ```powershell
+    cd frontend
+    ```
+2.  Install dependencies:
+    ```powershell
+    npm install
+    ```
 
-## 6️⃣ Set environment variables
-Create a **`.env`** file in the project root (next to `app.py`) with:
-```
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
-```
-Or set it directly in PowerShell:
-```powershell
-$env:GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
-```
+---
 
-## 7️⃣ Start the Flask backend
+## 🏃 Running the Application
+
+### Start the Backend
+From the root directory (with venv activated), you can initialize your API keys directly in the terminal and start the server:
+
 ```powershell
+# Set your Gemini API key(s)
+$env:AI_GEN_API_KEYS = "your_api_key_here"
+
+# Run the Flask server
 python app.py
 ```
-You should see:
-```
-Starting Flask Backend server on http://localhost:5000
- * Running on http://0.0.0.0:5000/ (Press CTRL+C to quit)
-```
-Leave this terminal open.
 
-## 8️⃣ Install Node.js (v20 + recommended)
-- Download from https://nodejs.org/en/download/
-- Ensure **Add to PATH** is selected.
+*(Note: If you have multiple keys for rotation, separate them with commas: `"key1,key2"`. Alternatively, you can still use a `.env` file as described in the setup section.)*
 
-## 9️⃣ Install frontend dependencies
-```powershell
-cd frontend
-npm install
-```
+The backend will start on `http://localhost:5000`. It will also initialize the database and seed default questions.
 
-## 🔟 Run the Vite dev server
+### Start the Frontend
+From the `frontend` directory:
 ```powershell
 npm run dev
 ```
-You’ll see something like:
-```
-  VITE v8.0.12  ready in 420 ms
-
-  ➜  Local:   http://127.0.0.1:5173/
-  ➜  Network: http://192.168.1.12:5173/
-```
-Open the **Local** URL in a browser. The UI talks to the backend at `http://localhost:5000`.
+Open the provided URL (typically `http://localhost:5173`) in your browser.
 
 ---
 
-### Quick sanity‑check
-1. Visit `http://localhost:5000/api/roles` → JSON list of job roles.
-2. In the UI, upload a sample resume (e.g., `sample-resume-samyam-data-scientist.pdf`) and click **Start Interview**.
-3. Verify you receive generated questions.
+## 📂 Project Structure
 
-If both succeed, the project is fully functional on the new laptop.
-
----
-
-#### 📋 Checklist (tick as you complete)
-- [ ] Clone / copy repo
-- [ ] Install Python 3.10+
-- [ ] `python -m venv venv && .\venv\Scripts\activate`
-- [ ] `pip install -r requirements.txt`
-- [ ] (optional) `python -m spacy download en_core_web_sm`
-- [ ] Create `.env` with `GEMINI_API_KEY` (or set `$env:GEMINI_API_KEY`)
-- [ ] `python app.py` (backend running)
-- [ ] Install Node.js v20+
-- [ ] `cd frontend && npm install`
-- [ ] `npm run dev` (frontend running)
-- [ ] Verify API (`/api/roles`) and UI workflow
+- `app.py`: Main Flask entry point and API routes.
+- `resume_parser.py`: Logic for PDF conversion and AI parsing.
+- `resume_screener.py`: Algorithm for candidate screening.
+- `question_generator.py`: Logic for AI question generation.
+- `db_helper.py`: MySQL database operations and schema management.
+- `api_rotator.py`: Manages rotation between multiple Gemini API keys.
+- `frontend/`: React application code.
+- `temp_uploads/`: Temporary storage for uploaded resumes.
 
 ---
 
-### Troubleshooting hints
-| Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| `pip` can’t find a package | Old pip / missing wheel | Run `python -m pip install --upgrade pip` then reinstall |
-| `ImportError: No module named spacy` after install | spaCy model not downloaded | Run `python -m spacy download en_core_web_sm` |
-| Frontend “fetch failed” (CORS) | Backend not running or wrong port | Ensure `python app.py` is active on **5000** |
-| “No API key” error from `/api/interview/start` | `GEMINI_API_KEY` missing / typo | Double‑check `.env` file or `$env:GEMINI_API_KEY` value |
+## 📋 API Sanity Check
+
+You can verify the backend is running by visiting:
+- `http://localhost:5000/api/roles` - Returns available job roles.
+- `http://localhost:5000/api/history` - Returns past interview sessions.
 
 ---
-
 

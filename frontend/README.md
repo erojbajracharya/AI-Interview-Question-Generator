@@ -1,16 +1,32 @@
-# React + Vite
+# AI-Interview-Question-Generator - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the React frontend for the AI Interview Question Generator. It is built using Vite and interacts with a Flask backend.
 
-Currently, two official plugins are available:
+## 🛠️ Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Resume Upload:** Upload PDF resumes for analysis.
+- **Job Role Selection:** Choose from predefined roles or specify a custom one.
+- **Interactive Interview:** Real-time interview interface with AI-generated questions.
+- **Evaluation Dashboard:** View detailed feedback and scores after the interview.
+- **History View:** Access past interview sessions and candidate reports.
 
-## React Compiler
+## 🚀 Setup & Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
 
-## Expanding the ESLint configuration
+2.  **Run Development Server:**
+    ```bash
+    npm run dev
+    ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+3.  **Build for Production:**
+    ```bash
+    npm run build
+    ```
+
+## 🔗 Connection to Backend
+
+By default, the frontend is configured to communicate with the backend at `http://localhost:5000`. Ensure the Flask backend is running before starting the interview process.

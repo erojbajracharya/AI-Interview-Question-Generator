@@ -17,7 +17,7 @@ from datetime import datetime
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "",        # ← Set your MySQL root password here
+    "password": "your_password",        # ← Set your MySQL root password here
     "database": "ai_interview_db"
 }
 
@@ -187,23 +187,6 @@ def save_candidate(full_name, email=None, phone=None, education=None, experience
         conn.close()
 
 
-def get_candidate(candidate_id):
-    """Retrieve a candidate record by ID."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Candidates WHERE candidate_id = %s", (candidate_id,))
-        return cursor.fetchone()
-    except Error as e:
-        print(f"[DB ERROR] get_candidate: {e}")
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
-
 # ── 2. Skills ────────────────────────────────────────────────────────────────
 
 def save_skills(candidate_id, hard_skills, soft_skills):
@@ -242,23 +225,6 @@ def save_skills(candidate_id, hard_skills, soft_skills):
         conn.close()
 
 
-def get_skills(candidate_id):
-    """Retrieve all skills for a candidate."""
-    conn = get_connection()
-    if not conn:
-        return []
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Skills WHERE candidate_id = %s", (candidate_id,))
-        return cursor.fetchall()
-    except Error as e:
-        print(f"[DB ERROR] get_skills: {e}")
-        return []
-    finally:
-        cursor.close()
-        conn.close()
-
-
 # ── 3. Interview Sessions ───────────────────────────────────────────────────
 
 def create_session(candidate_id, job_role, difficulty):
@@ -290,23 +256,6 @@ def create_session(candidate_id, job_role, difficulty):
         return session_id
     except Error as e:
         print(f"[DB ERROR] create_session: {e}")
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_session(session_id):
-    """Retrieve a session record by ID."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM InterviewSessions WHERE session_id = %s", (session_id,))
-        return cursor.fetchone()
-    except Error as e:
-        print(f"[DB ERROR] get_session: {e}")
         return None
     finally:
         cursor.close()
@@ -410,23 +359,6 @@ def save_summary(session_id, overall_score, strengths, weaknesses, final_feedbac
         return summary_id
     except Error as e:
         print(f"[DB ERROR] save_summary: {e}")
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_summary(session_id):
-    """Retrieve the interview summary for a given session."""
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM InterviewSummary WHERE session_id = %s", (session_id,))
-        return cursor.fetchone()
-    except Error as e:
-        print(f"[DB ERROR] get_summary: {e}")
         return None
     finally:
         cursor.close()

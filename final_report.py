@@ -1,5 +1,4 @@
 # final_report.py
-import os
 import re
 import api_rotator
 
