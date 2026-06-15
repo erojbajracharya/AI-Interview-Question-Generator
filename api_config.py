@@ -9,6 +9,10 @@ Gemini API keys, for example:
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 API_KEYS = [
     key.strip()

@@ -576,7 +576,7 @@ export default function App() {
               className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
             >
               <Clock size={20} className="nav-link-icon" />
-              MySQL Logs history
+              Log History
             </button>
           </li>
         </ul>
