@@ -8,17 +8,15 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
     Falls back to offline grading if no keys are valid or API fails entirely.
     """
     # Use built-in API keys from api_rotator (ignore api_keys parameter)
-    keys_list = api_rotator.get_all_keys()
+    rotator = api_rotator.get_rotator()
+    rotator.reset()  # Start from the first key
     
-    if not keys_list:
+    if rotator.is_offline:
         print("[REPORT] No API keys available. Falling back to offline heuristic grading.")
         return grade_answers_offline(questions, answers, role_info, difficulty, reference_answers=reference_answers)
 
     # We will try evaluating using the available keys
     from google import genai
-    
-    rotator = api_rotator.get_rotator()
-    rotator.reset()  # Start from the first key
     
     evaluations = []
     
@@ -33,7 +31,7 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
         # Try to grade this question, rotating keys if it fails
         success = False
         attempts = 0
-        max_attempts = len(keys_list)
+        max_attempts = len(api_rotator.get_all_keys()) * 3
         
         while not success and attempts < max_attempts:
             current_key = rotator.get_current_key()
@@ -62,16 +60,18 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
                 evaluations.append(response.text.strip())
                 success = True
             except Exception as e:
-                print(f"[REPORT ERROR] AI evaluation failed with current API key: {e}")
+                attempts += 1
+                print(f"[REPORT ERROR] AI evaluation failed (attempt {attempts}): {e}")
                 # Rotate to the next key
                 rotator.mark_failed(rotator.get_current_key())
-                if attempts < max_attempts - 1:
+                if attempts < max_attempts:
                     rotator.rotate()
                     print(f"[REPORT] Rotating to next API key...")
-                attempts += 1
+                    import time
+                    time.sleep(1)
                 
         if not success:
-            print("[REPORT WARNING] All API keys failed for this question. Falling back to offline grading for this and subsequent questions.")
+            print("[REPORT WARNING] All API keys failed after multiple cycles for this question. Falling back to offline grading for this and subsequent questions.")
             # Fallback to offline grading for the remaining questions
             remaining_qs = questions[idx:]
             remaining_as = answers[idx:]

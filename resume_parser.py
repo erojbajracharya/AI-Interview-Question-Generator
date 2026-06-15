@@ -2,6 +2,7 @@
 import os
 import re
 import json
+import datetime
 import pymupdf4llm
 from google import genai
 from google.genai import types
@@ -14,45 +15,53 @@ import api_rotator
 
 class ResumeProfile(BaseModel):
     is_resume: bool
+    full_name: str
     hard_skills: List[str]
     soft_skills: List[str]
     experience_years: float
 
 
-def _extract_explicit_months(text):
-    """Try to infer exact month-based experience durations from the resume text."""
+def _extract_explicit_experience(text):
+    """Try to infer exact experience durations from the resume text."""
     text_lower = text.lower()
 
-    # Prefer explicit total experience patterns first.
+    # Look for patterns like "5 years of experience" or "6 months experience"
     month_unit = r'(?:months?|mos?|mo\.?)'
-    patterns = [
+    year_unit = r'(?:years?|yrs?|yr\.?)'
+
+    # Check for years first
+    year_patterns = [
+        r'experience\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:[-\s]?' + year_unit + r')',
+        r'(\d+(?:\.\d+)?)\s*(?:[-\s]?' + year_unit + r')\s*(?:of\s*)?experience',
+        r'^(\d+(?:\.\d+)?)\s*(?:[-\s]?' + year_unit + r')\b',
+    ]
+    for pattern in year_patterns:
+        match = re.search(pattern, text_lower, re.MULTILINE)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                continue
+
+    # Then check for months
+    month_patterns = [
         r'experience\s*[:\-]?\s*(\d+)\s*(?:[-\s]?' + month_unit + r')',
         r'(\d+)\s*(?:[-\s]?' + month_unit + r')\s*(?:of\s*)?experience',
         r'^(\d+)\s*(?:[-\s]?' + month_unit + r')\b',
     ]
 
-    for pattern in patterns:
+    for pattern in month_patterns:
         match = re.search(pattern, text_lower, re.MULTILINE)
         if match:
             try:
-                return int(match.group(1))
+                return int(match.group(1)) / 12.0
             except ValueError:
                 continue
 
     # Support spelled-out month numbers like "six months".
     word_to_number = {
-        "one": 1,
-        "two": 2,
-        "three": 3,
-        "four": 4,
-        "five": 5,
-        "six": 6,
-        "seven": 7,
-        "eight": 8,
-        "nine": 9,
-        "ten": 10,
-        "eleven": 11,
-        "twelve": 12,
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+        "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
     }
 
     word_pattern = re.search(
@@ -60,32 +69,26 @@ def _extract_explicit_months(text):
         text_lower
     )
     if word_pattern:
-        return word_to_number.get(word_pattern.group(1), None)
+        return word_to_number.get(word_pattern.group(1)) / 12.0
 
     # Support common half-year phrasing.
     if re.search(r'\bhalf(?:[-\s]+year|\s+year)\b', text_lower):
-        return 6
-
-    # Fallback: look for any numeric month mentions.
-    match = re.search(r'(\d+)\s*(?:[-\s]?months?|[-\s]?mos?)', text_lower)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            pass
+        return 0.5
 
     return None
 
 
 def _normalize_experience_years(experience_years, text):
-    """Normalize extracted experience by using exact month text when available."""
+    """Normalize extracted experience by using exact text mentions when available."""
     if experience_years is None:
-        return 0.0
+        experience_years = 0.0
 
-    if experience_years < 1.0:
-        explicit_months = _extract_explicit_months(text)
-        if explicit_months is not None:
-            return explicit_months / 12.0
+    explicit_val = _extract_explicit_experience(text)
+    if explicit_val is not None:
+        # Heuristic: if an explicit mention of "X years of experience" is found and it is
+        # greater than what the LLM extracted, prefer the explicit mention.
+        if explicit_val > experience_years:
+            return explicit_val
 
     return experience_years
 
@@ -113,30 +116,39 @@ def parse_text(text):
 
     rotator = api_rotator.get_rotator()
     rotator.reset()
-    keys = api_rotator.get_all_keys()
     
-    # Check if we have any non-empty keys
-    valid_keys = [k for k in keys if k and k.strip()]
-    if not valid_keys:
-        raise ValueError("No valid Gemini API keys configured.")
+    if rotator.is_offline:
+        raise ValueError("Offline mode: No API keys configured.")
+
+    # Get current date for accurate experience calculation (dynamic for any year: 2026, 2027, 2030, etc.)
+    today = datetime.date.today()
+    current_date_str = today.strftime("%B %Y")
 
     prompt = (
-        f"Determine if the following text is a resume/CV. If the text is clearly not a resume or CV (e.g. it is a completely unrelated document, blank, random noise, or general text with no resume-like details such as work history, skills, contact info, or education), set `is_resume` to false.\n"
-        f"Extract resume data from the following Markdown text.\n"
-        f"In your extraction, normalize the extracted skills to match these canonical lists if they refer to the same concept (case-insensitive):\n"
+        f"Today is {current_date_str}. Extract resume data from the following Markdown text.\n"
+        f"Determine if the text is a resume/CV. If not, set `is_resume` to false.\n"
+        f"Extract the candidate's full name and set it to `full_name`.\n"
+        f"For `experience_years`, calculate the total years of professional experience.\n"
+        f"CRITICAL: If a role's end date is 'Present', 'Current', 'To Date', or similar, you MUST use {current_date_str} as the end date for that role. "
+        f"Calculate the duration between the start date and {current_date_str} accurately. "
+        f"Sum all durations and return the total as a float.\n"
+        f"Normalize skills to these canonical lists:\n"
         f"Canonical Hard Skills: {', '.join(canonical_hard)}\n"
         f"Canonical Soft Skills: {', '.join(canonical_soft)}\n\n"
         f"Resume Markdown:\n"
         f"{text}"
     )
 
-    for attempt in range(len(keys)):
+    attempt = 0
+    while True:
         api_key = rotator.get_current_key()
         if not api_key or not api_key.strip():
             # Skip empty keys
             rotator.mark_failed(api_key)
-            if attempt < len(keys) - 1:
-                rotator.rotate()
+            rotator.rotate()
+            attempt += 1
+            if attempt >= len(api_rotator.get_all_keys()) * 3:
+                break
             continue
 
         try:
@@ -157,6 +169,7 @@ def parse_text(text):
             extracted_years = float(data.get("experience_years", 0.0))
             normalized_years = _normalize_experience_years(extracted_years, text)
             return {
+                "full_name": data.get("full_name", "Unknown Candidate"),
                 "hard_skills": data.get("hard_skills", []),
                 "soft_skills": data.get("soft_skills", []),
                 "experience_years": normalized_years,
@@ -164,13 +177,17 @@ def parse_text(text):
         except Exception as e:
             if "The uploaded file does not appear to be a valid resume" in str(e):
                 raise e
-            print(f"[Resume Parser] Gemini API key attempt {attempt + 1} failed: {e}")
+            attempt += 1
+            print(f"[Resume Parser] Gemini API key attempt {attempt} failed: {e}")
             rotator.mark_failed(api_key)
-            if attempt < len(keys) - 1:
+            
+            if attempt < len(api_rotator.get_all_keys()) * 3:
                 rotator.rotate()
-                print(f"[Resume Parser] Rotating to next API key...")
+                print(f"[Resume Parser] Rotating to next API key (attempt {attempt + 1})...")
+                import time
+                time.sleep(1)
             else:
-                raise ValueError(f"All API keys failed. Last error: {e}")
+                raise ValueError(f"All API keys failed after multiple cycles. Last error: {e}")
 
     raise ValueError("All API keys failed.")
 

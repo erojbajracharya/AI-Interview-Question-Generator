@@ -815,7 +815,7 @@ export default function App() {
 
                   <div className="score-metric">
                     <div className="score-header">
-                      <span>Hard Skills match (50% weight)</span>
+                      <span>Hard Skills match (70% weight)</span>
                       <span>{(screeningResult.details.hard_ratio * 100).toFixed(0)}%</span>
                     </div>
                     <div className="progress-bar-container">
@@ -825,7 +825,7 @@ export default function App() {
 
                   <div className="score-metric">
                     <div className="score-header">
-                      <span>Experience match (30% weight)</span>
+                      <span>Experience match (20% weight)</span>
                       <span>{(screeningResult.details.exp_ratio * 100).toFixed(0)}%</span>
                     </div>
                     <div className="progress-bar-container">
@@ -835,7 +835,7 @@ export default function App() {
 
                   <div className="score-metric">
                     <div className="score-header">
-                      <span>Soft Skills match (20% weight)</span>
+                      <span>Soft Skills match (10% weight)</span>
                       <span>{(screeningResult.details.soft_ratio * 100).toFixed(0)}%</span>
                     </div>
                     <div className="progress-bar-container">

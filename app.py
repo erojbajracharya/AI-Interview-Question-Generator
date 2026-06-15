@@ -85,9 +85,12 @@ def screen_resume():
         })
         
         # Save to Candidate database tables
-        candidate_name = os.path.splitext(filename)[0].replace("_", " ").replace("Resume", "").strip() or "Candidate"
+        candidate_name = resume_data.get("full_name")
+        if not candidate_name or candidate_name == "Unknown Candidate":
+            candidate_name = os.path.splitext(filename)[0].replace("_", " ").replace("Resume", "").strip() or "Candidate"
+
         email = f"{candidate_name.lower().replace(' ', '')}@example.com"
-        
+
         candidate_id = DB_MODULE.save_candidate(
             full_name=candidate_name,
             email=email,
@@ -193,8 +196,13 @@ def start_interview():
                 ai_success = True
                 questions_data = [{"question_text": q, "reference_answer": None} for q in raw_qs]
         except Exception as e:
-            print(f"[AI Start Error] {e}. Falling back to DB mode.")
-            source = "db" # fallback to database
+            if API_ROTATOR.get_rotator().is_offline:
+                print(f"[AI Start Error] {e}. Falling back to DB mode (Offline).")
+                source = "db" # fallback to database
+            else:
+                # If not offline, we should not fall back to DB per requirements
+                print(f"[AI Start Error] {e}. Fallback to DB disabled (Online).")
+                return jsonify({"success": False, "error": f"AI Generation failed: {str(e)}"}), 500
 
     # DB Mode
     if source == "db" or not questions_data:
@@ -209,6 +217,7 @@ def start_interview():
         
     if not questions_data:
         # Fallback: generate field-specific placeholder questions if both AI and DB failed
+        # This only happens if we are offline and DB is empty
         placeholder_questions = [
             f"Tell me about your experience relevant to {role_title} and how it prepared you for this position.",
             f"What are the top challenges in {role_title} work, and how would you approach them?",

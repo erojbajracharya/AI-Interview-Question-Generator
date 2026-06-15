@@ -9,17 +9,26 @@ from api_config import API_KEYS
 
 class APIRotator:
     """Manages API key rotation across multiple keys."""
-    
+
     def __init__(self):
         self.current_index = 0
         self.failed_keys = set()
-    
+
+    @property
+    def is_offline(self):
+        """Returns True if no API keys are configured."""
+        return len(API_KEYS) == 0
+
     def get_current_key(self):
         """Get the current API key."""
+        if self.is_offline:
+            return None
         return API_KEYS[self.current_index]
-    
+
     def rotate(self):
         """Move to the next available API key."""
+        if self.is_offline:
+            return None
         self.current_index = (self.current_index + 1) % len(API_KEYS)
         return API_KEYS[self.current_index]
     
