@@ -124,20 +124,39 @@ def parse_text(text):
     today = datetime.date.today()
     current_date_str = today.strftime("%B %Y")
 
-    prompt = (
-        f"Today is {current_date_str}. Extract resume data from the following Markdown text.\n"
-        f"Determine if the text is a resume/CV. If not, set `is_resume` to false.\n"
-        f"Extract the candidate's full name and set it to `full_name`.\n"
-        f"For `experience_years`, calculate the total years of professional experience.\n"
-        f"CRITICAL: If a role's end date is 'Present', 'Current', 'To Date', or similar, you MUST use {current_date_str} as the end date for that role. "
-        f"Calculate the duration between the start date and {current_date_str} accurately. "
-        f"Sum all durations and return the total as a float.\n"
-        f"Normalize skills to these canonical lists:\n"
-        f"Canonical Hard Skills: {', '.join(canonical_hard)}\n"
-        f"Canonical Soft Skills: {', '.join(canonical_soft)}\n\n"
-        f"Resume Markdown:\n"
-        f"{text}"
-    )
+    prompt = f"""
+    You are an expert resume parser.
+
+    Current Date: {current_date_str}
+
+    Task:
+    Extract structured resume data.
+
+    Rules:
+    - Determine whether the document is a resume/CV.
+    - Extract full name, education, work history, and skills.
+    - Calculate total professional experience.
+    - For active roles (Present, Current, Ongoing, To Date), use {current_date_str}.
+    - Sum role durations and return experience_years rounded to 1 decimal.
+
+    Skills:
+    - Extract ONLY from dedicated Skills/Technical Skills sections.
+    - Ignore skills mentioned in experience, projects, education, certifications, or summaries.
+    - Normalize skills using the provided canonical lists.
+    - Remove duplicates.
+    - Do not infer or invent skills.
+
+    Allowed Hard Skills:
+    {', '.join(canonical_hard)}
+
+    Allowed Soft Skills:
+    {', '.join(canonical_soft)}
+
+    Document:
+    {text}
+
+    Return only schema-compliant output.
+    """
 
     attempt = 0
     while True:
@@ -154,7 +173,7 @@ def parse_text(text):
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3-flash-preview',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",

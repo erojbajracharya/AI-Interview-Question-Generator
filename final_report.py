@@ -37,24 +37,51 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
             current_key = rotator.get_current_key()
             try:
                 client = genai.Client(api_key=current_key)
-                
-                # Build the prompt
-                prompt = f"Role: {role_info['title']} ({difficulty})\nQuestion: {q}\n"
-                if ref_ans:
-                    prompt += f"Standard Reference Answer: {ref_ans}\n"
-                prompt += f"Candidate Answer: {a}\n\n"
-                
-                prompt += (
-                    "Evaluate the candidate's answer. Format your response exactly as: Score: X/10 | Feedback: ... | Improve: ...\n"
-                )
-                if ref_ans:
-                    prompt += "CRITICAL: Compare the candidate's answer against the standard reference answer. Check if they capture the key points. Award points accordingly based on how accurate and complete it is relative to the reference.\n"
-                prompt += (
-                    "CRITICAL: If the answer is off-topic, gibberish, repetitive, a cop-out ('skip', 'idk', 'n/a'), or copies the question, score 0/10 and state why in Feedback (max 2 sentences)."
-                )
+
+                prompt = f"""
+                You are a senior interviewer evaluating a candidate.
+
+                Role: {role_info['title']}
+                Difficulty: {difficulty}
+
+                Question:
+                {q}
+
+                Reference Answer:
+                {ref_ans if ref_ans else "None"}
+
+                Candidate Answer:
+                {a}
+
+                Evaluate:
+                1. Relevance
+                2. Technical accuracy
+                3. Completeness
+                4. Communication clarity
+                5. Alignment with {difficulty}-level expectations
+
+                Scoring:
+                0-2 = Incorrect, irrelevant, skipped, or gibberish
+                3-4 = Weak understanding
+                5-6 = Basic competency
+                7-8 = Strong answer
+                9-10 = Expert-level answer with depth, reasoning, or practical insight
+
+                Rules:
+                - Compare against the reference answer when available.
+                - Accept alternative correct approaches.
+                - Prioritize correctness over confidence or length.
+                - Penalize factual errors and missing critical concepts.
+                - If the answer is empty, copied, off-topic, or meaningless, score 0/10.
+
+                Return EXACTLY:
+                Score: X/10 | Feedback: ... | Improve: ...
+
+                Feedback and Improve must each be concise and actionable.
+                """
                 
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3-flash-preview',
                     contents=prompt
                 )
                 evaluations.append(response.text.strip())

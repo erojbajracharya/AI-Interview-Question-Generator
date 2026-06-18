@@ -19,7 +19,7 @@ An end-to-end platform for automated resume screening and AI-powered interview q
 - **Backend:** Python, Flask, Flask-CORS, Google GenAI SDK, PyMuPDF4LLM, MySQL Connector, NumPy.
 - **Frontend:** React 19, Vite, Lucide React (Icons).
 - **Database:** MySQL.
-- **AI Model:** Google Gemini (gemini-2.5-flash).
+- **AI Model:** Google Gemini (gemini-3-flash-preview).
 
 ---
 

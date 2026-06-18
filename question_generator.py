@@ -44,17 +44,35 @@ def generate_questions(skills_profile, role_key=None, difficulty="beginner", num
         try:
             api_key = rotator.get_current_key()
             client = genai.Client(api_key=api_key)
-            
-            prompt = (
-                f"You are a hiring manager interviewing for {role_title} ({difficulty} level).\n"
-                f"Candidate: {skills_profile['experience_years']:g} yrs exp. Skills: {', '.join(skills_profile['hard_skills'] + skills_profile['soft_skills'])}.\n"
-                f"Generate {num_questions} realistic, conversational questions that are specific to the {role_title} field and the candidate's skills."
-                f" Only ask questions related to this role; do not include generic, unrelated, or cross-disciplinary questions.\n"
-                f"Format: Return only a numbered list, one question per line, no extra text."
-            )
+
+            prompt = f"""
+            You are a senior hiring manager.
+
+            Role: {role_title}
+            Difficulty: {difficulty}
+
+            Candidate:
+            - Experience: {skills_profile['experience_years']:g} years
+            - Hard Skills: {', '.join(skills_profile['hard_skills'])}
+            - Soft Skills: {', '.join(skills_profile['soft_skills'])}
+
+            Generate exactly {num_questions} interview questions.
+
+            Rules:
+            - Focus only on {role_title}.
+            - Tailor questions to the candidate profile.
+            - Match {difficulty} difficulty.
+            - Prioritize practical, scenario-based, and decision-making questions.
+            - Each question must assess a different competency.
+            - Avoid generic interview questions.
+            - Do not introduce unrelated technologies or skills.
+            - Progress from easier to harder questions.
+
+            Return ONLY a numbered list.
+            """
             
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3-flash-preview',
                 contents=prompt
             )
             

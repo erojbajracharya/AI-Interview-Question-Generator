@@ -847,7 +847,7 @@ export default function App() {
                 <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                   {!screeningResult.passed ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger)', fontSize: '13px' }}>
-                      <AlertCircle size={16} /> Minimum score required to unlock interview is 40%.
+                      <AlertCircle size={16} /> Minimum score required to unlock interview is 50%.
                     </div>
                   ) : (
                     <button onClick={handleStartInterview} className="btn btn-success">
