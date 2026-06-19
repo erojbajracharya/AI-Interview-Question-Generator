@@ -11,13 +11,16 @@ Requirements:
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 # ── Database connection settings ─────────────────────────────────────────────
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "",        # ← Set your MySQL root password here
+    "password": os.getenv("PASSWORD"),        # ← Set your MySQL root password here
     "database": "ai_interview_db"
 }
 
