@@ -81,7 +81,7 @@ def grade_answers(questions, answers, role_info, difficulty, reference_answers=N
                 """
                 
                 response = client.models.generate_content(
-                    model='gemini-3-flash-preview',
+                    model='gemini-3.5-flash',
                     contents=prompt
                 )
                 evaluations.append(response.text.strip())

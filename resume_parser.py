@@ -173,7 +173,7 @@ def parse_text(text):
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model='gemini-3-flash-preview',
+                model='gemini-3.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",

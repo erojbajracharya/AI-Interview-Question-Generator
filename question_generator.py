@@ -72,7 +72,7 @@ def generate_questions(skills_profile, role_key=None, difficulty="beginner", num
             """
             
             response = client.models.generate_content(
-                model='gemini-3-flash-preview',
+                model='gemini-3.5-flash',
                 contents=prompt
             )
             
