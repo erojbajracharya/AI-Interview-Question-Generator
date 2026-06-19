@@ -16,8 +16,6 @@ import {
   User,
   ExternalLink,
   ChevronLeft,
-  Mic,
-  MicOff,
   Send,
   Volume2,
   Cpu,
@@ -62,46 +60,8 @@ export default function App() {
   const [candidateAnswers, setCandidateAnswers] = useState([]);
   const [activeAnswerText, setActiveAnswerText] = useState('');
   
-  // Custom states for messaging platform feel & speech recognition
+  // Custom states for messaging platform feel
   const [isTyping, setIsTyping] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(true);
-  const recognitionRef = useRef(null);
-  const isListeningRef = useRef(false);
-  const startTextRef = useRef('');
-  const activeAnswerTextRef = useRef('');
-  
-  // Timer state
-  const [recordingTime, setRecordingTime] = useState(0);
-  const timerRef = useRef(null);
-
-  // Sync activeAnswerText to ref to avoid stale closures in event listeners
-  useEffect(() => {
-    activeAnswerTextRef.current = activeAnswerText;
-  }, [activeAnswerText]);
-
-  // Check speech support on mount
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-    }
-  }, []);
-
-  const startTimer = () => {
-    setRecordingTime(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setRecordingTime((prev) => prev + 1);
-    }, 1000);
-  };
-
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
 
   // simulated typing effect for question loading
   useEffect(() => {
@@ -114,82 +74,6 @@ export default function App() {
     }
   }, [currentQuestionIdx, activeTab, sessionData]);
 
-  const toggleListening = () => {
-    if (!speechSupported) {
-      alert('Speech Recognition is not supported by your browser. Please use Chrome, Safari, or Edge.');
-      return;
-    }
-
-    if (isListening) {
-      // Stop listening manually
-      isListeningRef.current = false;
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      stopTimer();
-    } else {
-      // Start listening
-      try {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        startTextRef.current = activeAnswerTextRef.current; // set baseline text
-
-        recognition.onresult = (event) => {
-          if (!isListeningRef.current) return;
-          let transcript = '';
-          for (let i = 0; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
-          }
-          const base = startTextRef.current;
-          const separator = base && !base.endsWith(' ') ? ' ' : '';
-          setActiveAnswerText(base + separator + transcript);
-        };
-
-        recognition.onerror = (event) => {
-          console.error('Speech recognition error', event.error);
-          if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            setIsListening(false);
-            isListeningRef.current = false;
-            stopTimer();
-          }
-        };
-
-        recognition.onend = () => {
-          if (isListeningRef.current) {
-            // Restart automatically if user hasn't stopped it
-            try {
-              startTextRef.current = activeAnswerTextRef.current;
-              recognition.start();
-            } catch (err) {
-              console.error('Failed to restart speech recognition:', err);
-            }
-          } else {
-            setIsListening(false);
-            stopTimer();
-          }
-        };
-
-        recognitionRef.current = recognition;
-        isListeningRef.current = true;
-        recognition.start();
-        setIsListening(true);
-        startTimer();
-      } catch (err) {
-        console.error('Failed to start speech recognition:', err);
-      }
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
 
   const formatExperienceYears = (years) => {
     if (years === null || years === undefined || isNaN(years)) return 'N/A';
@@ -314,7 +198,13 @@ export default function App() {
         setCandidateName(data.candidate_name);
         setResumeData(data.resume_data);
         setScreeningResult(data.screening);
-        setActiveTab('screening');
+        
+        // Intern Flow: skip screening score and go directly to question generation screen/process
+        if (selectedRoleKey === 'intern') {
+          await handleStartInterviewDirect(data.candidate_id, data.resume_data);
+        } else {
+          setActiveTab('screening');
+        }
       } else {
         alert(`Assessment Failed: ${data.error}`);
       }
@@ -326,14 +216,8 @@ export default function App() {
     }
   };
 
-  // Start Interview Simulation (POST /api/interview/start)
-  const handleStartInterview = async () => {
-    if (!candidateId) {
-      alert("Database Connection Error: MySQL database is not connected. Please make sure MySQL is running and properly configured in db_helper.py.");
-      return;
-    }
-    if (!resumeData) return;
-
+  // Helper function to handle direct start of interview for intern bypassing state updates lag
+  const handleStartInterviewDirect = async (cId, rData) => {
     setIsParsing(true); // show loader
     try {
       const response = await fetch(`${API_BASE}/interview/start`, {
@@ -344,12 +228,15 @@ export default function App() {
           role_key: resumeData.role_key !== 'custom' ? resumeData.role_key : undefined,
           role_title: resumeData.role_title,
           difficulty: resumeData.difficulty,
+          candidate_id: cId,
+          role_key: selectedRoleKey,
+          difficulty: rData.difficulty,
           num_questions: numQuestions,
           source: questionSource,
           save_to_db: saveToDb,
-          experience_years: resumeData.experience_years,
-          hard_skills: resumeData.hard_skills,
-          soft_skills: resumeData.soft_skills
+          experience_years: rData.experience_years,
+          hard_skills: rData.hard_skills,
+          soft_skills: rData.soft_skills
         })
       });
 
@@ -371,16 +258,21 @@ export default function App() {
     }
   };
 
+  // Start Interview Simulation (POST /api/interview/start)
+  const handleStartInterview = async () => {
+    if (!candidateId) {
+      alert("Database Connection Error: MySQL database is not connected. Please make sure MySQL is running and properly configured in db_helper.py.");
+      return;
+    }
+    if (!resumeData) return;
+
+    await handleStartInterviewDirect(candidateId, resumeData);
+  };
+
+
   // Handle Answer Submission (automatic evaluation on last question)
   const handleSubmitAnswer = async (e) => {
     if (e) e.preventDefault();
-    
-    // Stop speech recognition if listening
-    if (isListening && recognitionRef.current) {
-      isListeningRef.current = false;
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
     
     const answer = activeAnswerText.trim() || '[Skipped]';
     
@@ -397,6 +289,7 @@ export default function App() {
       await handleAutoEvaluation(updatedAnswers);
     }
   };
+
 
   // Submit and grade answers (POST /api/interview/submit)
   const handleAutoEvaluation = async (finalAnswers) => {
@@ -956,39 +849,12 @@ export default function App() {
                 <div ref={chatBottomRef}></div>
               </div>
 
-              {/* Sound Wave Animation when recording */}
-              {isListening && (
-                <div className="voice-status-container">
-                  <div className="soundwave">
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                    <div className="bar"></div>
-                  </div>
-                  <span className="voice-status-text">Recording... {formatTime(recordingTime)}</span>
-                </div>
-              )}
-
               {/* Input section */}
               <form onSubmit={handleSubmitAnswer} className="chat-input-area">
                 <div className="chat-input-row">
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className={`btn-voice ${isListening ? 'active' : ''}`}
-                    title={isListening ? "Stop Listening" : "Speak Response (Voice Mode)"}
-                    disabled={isTyping}
-                  >
-                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-                  </button>
-
                   <textarea
                     className="chat-input-box"
-                    placeholder={isListening ? "Listening... speak into your mic." : "Type your answer or click the microphone to speak..."}
+                    placeholder="Type your answer..."
                     value={activeAnswerText}
                     onChange={(e) => setActiveAnswerText(e.target.value)}
                     onKeyDown={(e) => {
@@ -997,7 +863,7 @@ export default function App() {
                         handleSubmitAnswer();
                       }
                     }}
-                    style={{ height: '80px' }}
+                    style={{ height: '80px', borderRadius: '12px' }}
                     disabled={isTyping}
                   />
 
