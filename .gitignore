@@ -1,6 +1,7 @@
 # Environment & Configuration
 .env
 .env.local
+.venv
 
 # Python
 __pycache__
